@@ -15,7 +15,7 @@ ifndef SSH_KEY
 $(error SSH_KEY is not set. Add it to your .env (e.g. SSH_KEY=./my-key.pem))
 endif
 
-.PHONY: all clean build package deploy
+.PHONY: all clean build package deploy bootstrap deploy.commands
 
 all: deploy
 
@@ -40,3 +40,10 @@ deploy: package
 		sudo systemctl restart discordbot"
 	@echo "✅ Deployment Complete!"
 	@rm -f bot-deploy.tar.gz
+
+bootstrap:
+	chmod +x bootstrap.sh
+	./bootstrap.sh
+
+deploy.commands:
+	npm run deploy-commands

@@ -1,28 +1,48 @@
-import NodeGeocoder from 'node-geocoder';
 import * as GeoTZ from 'geo-tz';
 
-type GeocoderOptions = Parameters<typeof NodeGeocoder>[0];
+interface OpenMeteoResult {
+    name?: string;
+    latitude?: number;
+    longitude?: number;
+    timezone?: string;
+    country?: string;
+    admin1?: string;
+}
 
-const geocoder = NodeGeocoder({
-    provider: 'openstreetmap',
-    userAgent: 'xiuh_bot_ts_v1'
-} as GeocoderOptions & { userAgent: string });
-
-export const getTimezoneFromCity = async (city: string): Promise<{ timezone: string, address: string } | null> => {
+export const getTimezoneFromCity = async (
+    city: string
+): Promise<{ timezone: string; address: string } | null> => {
     try {
-        const results = await geocoder.geocode(city);
-        if (!results || results.length === 0) return null;
+        const params = new URLSearchParams({
+            name: city,
+            count: '1',
+            language: 'en',
+            format: 'json'
+        });
 
-        const { latitude, longitude, formattedAddress } = results[0];
-        
-        if (!latitude || !longitude) return null;
+        const response = await fetch(`https://geocoding-api.open-meteo.com/v1/search?${params.toString()}`);
+        if (!response.ok) {
+            console.error("Geo Error: Unable to query Open-Meteo geocoding API", response.statusText);
+            return null;
+        }
 
-        const timezones = GeoTZ.find(latitude, longitude);
-        if (!timezones || timezones.length === 0) return null;
+        const data = await response.json() as { results?: OpenMeteoResult[] };
+        const result = data.results && data.results[0];
+
+        if (!result || !result.latitude || !result.longitude) return null;
+
+        const timezone =
+            result.timezone ||
+            (GeoTZ.find(result.latitude, result.longitude)?.[0] ?? null);
+
+        if (!timezone) return null;
+
+        const addressParts = [result.name, result.admin1, result.country].filter(Boolean);
+        const address = addressParts.length > 0 ? addressParts.join(', ') : city;
 
         return {
-            timezone: timezones[0],
-            address: formattedAddress || city
+            timezone,
+            address
         };
     } catch (error) {
         console.error("Geo Error:", error);

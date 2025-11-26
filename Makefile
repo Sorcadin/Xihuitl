@@ -1,8 +1,19 @@
 # --- CONFIGURATION ---
-EC2_USER = ec2-user
-EC2_HOST = 1.2.3.4  # REPLACE WITH YOUR IP
-SSH_KEY  = ./my-key.pem # REPLACE WITH YOUR KEY PATH
-REMOTE_DIR = /home/ec2-user/xiuh-bot
+ifneq (,$(wildcard ./.env))
+include .env
+export $(shell sed -n 's/^\([A-Za-z_][A-Za-z0-9_]*\)=.*/\1/p' .env)
+endif
+
+EC2_USER ?= ec2-user
+REMOTE_DIR ?= /home/ec2-user/xiuh-bot
+
+ifndef EC2_HOST
+$(error EC2_HOST is not set. Add it to your .env (e.g. EC2_HOST=3.16.x.x))
+endif
+
+ifndef SSH_KEY
+$(error SSH_KEY is not set. Add it to your .env (e.g. SSH_KEY=./my-key.pem))
+endif
 
 .PHONY: all clean build package deploy
 

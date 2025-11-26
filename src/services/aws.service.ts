@@ -1,11 +1,25 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, PutCommand, BatchGetCommand } from "@aws-sdk/lib-dynamodb";
+import * as dotenv from "dotenv";
 import { UserTimezone } from "../types";
 
-const REGION = process.env.AWS_REGION || "us-east-1";
-const TABLE_NAME = process.env.DYNAMO_TABLE || "DiscordUserTimezones";
+dotenv.config();
 
-const client = new DynamoDBClient({ region: REGION });
+const REGION = process.env.AWS_REGION;
+const TABLE_NAME = process.env.DYNAMO_TABLE;
+
+if (!REGION) {
+    throw new Error("Missing AWS_REGION in environment. Set AWS_REGION in your .env file.");
+}
+
+if (!TABLE_NAME) {
+    throw new Error("Missing DYNAMO_TABLE in environment. Set DYNAMO_TABLE in your .env file.");
+}
+
+const RESOLVED_REGION = REGION;
+const RESOLVED_TABLE = TABLE_NAME;
+
+const client = new DynamoDBClient({ region: RESOLVED_REGION });
 const docClient = DynamoDBDocumentClient.from(client);
 
 class AWSService {
@@ -55,7 +69,7 @@ class AWSService {
         };
 
         await docClient.send(new PutCommand({
-            TableName: TABLE_NAME,
+            TableName: RESOLVED_TABLE,
             Item: { user_id: userId, timezone: timezone, display_location: location }
         }));
 
@@ -70,11 +84,11 @@ class AWSService {
 
             try {
                 const command = new BatchGetCommand({
-                    RequestItems: { [TABLE_NAME]: { Keys: keys } }
+                    RequestItems: { [RESOLVED_TABLE]: { Keys: keys } }
                 });
                 const response = await docClient.send(command);
-                if (response.Responses && response.Responses[TABLE_NAME]) {
-                    results.push(...(response.Responses[TABLE_NAME] as UserTimezone[]));
+                if (response.Responses && response.Responses[RESOLVED_TABLE]) {
+                    results.push(...(response.Responses[RESOLVED_TABLE] as UserTimezone[]));
                 }
             } catch (e) {
                 console.error("DynamoDB Batch Error:", e);

@@ -1,10 +1,12 @@
 import NodeGeocoder from 'node-geocoder';
 import * as GeoTZ from 'geo-tz';
 
+type GeocoderOptions = Parameters<typeof NodeGeocoder>[0];
+
 const geocoder = NodeGeocoder({
     provider: 'openstreetmap',
     userAgent: 'xiuh_bot_ts_v1'
-});
+} as GeocoderOptions & { userAgent: string });
 
 export const getTimezoneFromCity = async (city: string): Promise<{ timezone: string, address: string } | null> => {
     try {

@@ -43,7 +43,7 @@ export const timeCommand: Command = {
             await awsService.saveUser(interaction.user.id, result.timezone, result.address);
             
             const embed = new EmbedBuilder()
-                .setTitle("Location Updated")
+                .setTitle("📍 Location Updated")
                 .setColor("Green")
                 .setDescription(`**<@${interaction.user.id}>** set to:\n\`${result.address}\``);
             await interaction.editReply({ embeds: [embed] });
@@ -115,7 +115,6 @@ export const timeCommand: Command = {
                 .setTitle("🌎 Server Timezones")
                 .setColor("Blurple")
                 .setDescription(chunk.join("\n"));
-
             await interaction.editReply({ embeds: [embed] });
         }
     }

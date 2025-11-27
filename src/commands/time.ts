@@ -43,7 +43,7 @@ export const timeCommand: Command = {
             await awsService.saveUser(interaction.user.id, result.timezone, result.address);
             
             const embed = new EmbedBuilder()
-                .setTitle("🌍 Location Updated")
+                .setTitle("Location Updated")
                 .setColor("Green")
                 .setDescription(`**<@${interaction.user.id}>** set to:\n\`${result.address}\``);
             await interaction.editReply({ embeds: [embed] });
@@ -80,9 +80,9 @@ export const timeCommand: Command = {
                 }
                 const time = DateTime.now().setZone(result.timezone);
                 const embed = new EmbedBuilder()
-                    .setTitle(`🕒 Time in ${city}`)
+                    .setTitle(`🕒 Time in ${result.address}`)
                     .setColor("Orange")
-                    .setDescription(`**${time.toFormat("hh:mm a")}**\n\`${result.address}\``);
+                    .setDescription(`**${time.toFormat("hh:mm a LLL dd")}**`);
                 await interaction.editReply({ embeds: [embed] });
             }
         }
@@ -105,14 +105,14 @@ export const timeCommand: Command = {
                 const member = members.get(u.user_id);
                 return {
                     offset: time.offset,
-                    text: `\`${time.toFormat("hh:mm a")}\` **${member?.displayName || "Unknown"}**`
+                    text: `\`${time.toFormat("hh:mm a LLL dd")}\`\t**${member?.displayName || "Unknown"}**`
                 };
             }).sort((a, b) => a.offset - b.offset);
 
             const chunk = sorted.map(s => s.text).slice(0, 20); 
 
             const embed = new EmbedBuilder()
-                .setTitle("🌍 Server Timezones")
+                .setTitle("🌎 Server Timezones")
                 .setColor("Blurple")
                 .setDescription(chunk.join("\n"));
 

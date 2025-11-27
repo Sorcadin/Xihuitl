@@ -7,6 +7,7 @@ interface OpenMeteoResult {
     timezone?: string;
     country?: string;
     admin1?: string;
+    admin2?: string;
 }
 
 export const getTimezoneFromCity = async (
@@ -37,7 +38,7 @@ export const getTimezoneFromCity = async (
 
         if (!timezone) return null;
 
-        const addressParts = [result.name, result.admin1, result.country].filter(Boolean);
+        const addressParts = [...new Set([result.name, result.admin2,result.admin1, result.country].filter(Boolean))];
         const address = addressParts.length > 0 ? addressParts.join(', ') : city;
 
         return {

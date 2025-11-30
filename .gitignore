@@ -1,6 +1,17 @@
-.env
-node_modules/
-dist/
-bot-deploy.tar.gz
-*.pem
-.DS_Store
+# Environment & Secrets
+.env                    # Environment variables (Discord token, AWS credentials, etc.)
+*.pem                   # SSH keys for EC2 access
+
+# Dependencies
+node_modules/           # NPM packages
+
+# Build Outputs
+dist/                   # Compiled TypeScript (bot application)
+bot-deploy.tar.gz       # Deployment package
+
+# CDK Infrastructure
+cdk.out/                # CDK synthesized CloudFormation templates
+cdk.context.json        # CDK context cache (VPC lookups, etc.)
+
+# System Files
+.DS_Store               # macOS finder metadata

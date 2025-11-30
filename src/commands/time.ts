@@ -109,6 +109,11 @@ export const timeCommand: Command = {
                 timezoneGroups.get(user.timezone)!.push(user);
             }
 
+            const getTimeOfDayEmoji = (hour: number): string => {
+                if (hour >= 6 && hour < 18) return '☀️'; // Day
+                return '🌕'; // Night
+            };
+
             // Build the formatted output
             const timezoneEntries = Array.from(timezoneGroups.entries()).map(([timezone, users]) => {
                 const time = DateTime.now().setZone(timezone);
@@ -131,9 +136,11 @@ export const timeCommand: Command = {
                     return `\u2003${member?.displayName || "Unknown"}`;
                 }).join("\n");
 
+                const emoji = getTimeOfDayEmoji(time.hour);
+
                 return {
                     offset: offsetMinutes,
-                    text: `\`${time.toFormat("hh:mm a LLL dd")}\` - **${zoneName}**\n${userList}`
+                    text: `${emoji} \`${time.toFormat("hh:mm a LLL dd")}\` - **${zoneName}**\n${userList}`
                 };
             }).sort((a, b) => a.offset - b.offset);
 

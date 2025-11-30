@@ -1,26 +1,59 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, PutCommand, BatchGetCommand } from "@aws-sdk/lib-dynamodb";
+import { SSMClient, GetParameterCommand } from "@aws-sdk/client-ssm";
 import * as dotenv from "dotenv";
 import { UserTimezone } from "../types";
 
 dotenv.config();
 
-const REGION = process.env.AWS_REGION;
-const TABLE_NAME = process.env.DYNAMO_TABLE;
+const REGION = process.env.AWS_REGION || "us-east-2";
 
 if (!REGION) {
     throw new Error("Missing AWS_REGION in environment. Set AWS_REGION in your .env file.");
 }
 
-if (!TABLE_NAME) {
-    throw new Error("Missing DYNAMO_TABLE in environment. Set DYNAMO_TABLE in your .env file.");
-}
-
 const RESOLVED_REGION = REGION;
-const RESOLVED_TABLE = TABLE_NAME;
 
-const client = new DynamoDBClient({ region: RESOLVED_REGION });
-const docClient = DynamoDBDocumentClient.from(client);
+// Initialize AWS clients
+const dynamoClient = new DynamoDBClient({ region: RESOLVED_REGION });
+const docClient = DynamoDBDocumentClient.from(dynamoClient);
+const ssmClient = new SSMClient({ region: RESOLVED_REGION });
+
+// Table name resolution: Try .env first, then SSM Parameter Store
+let RESOLVED_TABLE: string | null = null;
+
+async function resolveTableName(): Promise<string> {
+    if (RESOLVED_TABLE) {
+        return RESOLVED_TABLE;
+    }
+
+    // Try environment variable first
+    if (process.env.DYNAMO_TABLE) {
+        RESOLVED_TABLE = process.env.DYNAMO_TABLE;
+        return RESOLVED_TABLE;
+    }
+
+    // Fall back to SSM Parameter Store (for EC2 runtime)
+    try {
+        const command = new GetParameterCommand({
+            Name: "/xiuh/table-name",
+        });
+        const response = await ssmClient.send(command);
+        
+        if (response.Parameter?.Value) {
+            RESOLVED_TABLE = response.Parameter.Value;
+            console.log(`Resolved table name from SSM: ${RESOLVED_TABLE}`);
+            return RESOLVED_TABLE;
+        }
+    } catch (error) {
+        console.error("Failed to fetch table name from SSM:", error);
+    }
+
+    throw new Error(
+        "Missing DYNAMO_TABLE in environment and unable to fetch from SSM Parameter Store. " +
+        "Set DYNAMO_TABLE in your .env file or ensure /xiuh/table-name parameter exists in SSM."
+    );
+}
 
 class AWSService {
     private cache: Map<string, UserTimezone> = new Map();
@@ -61,6 +94,7 @@ class AWSService {
     }
 
     public async saveUser(userId: string, timezone: string, location: string) {
+        const tableName = await resolveTableName();
         const item: UserTimezone = {
             user_id: userId,
             timezone: timezone,
@@ -69,7 +103,7 @@ class AWSService {
         };
 
         await docClient.send(new PutCommand({
-            TableName: RESOLVED_TABLE,
+            TableName: tableName,
             Item: { user_id: userId, timezone: timezone, display_location: location }
         }));
 
@@ -77,6 +111,7 @@ class AWSService {
     }
 
     private async batchFetch(userIds: string[]): Promise<UserTimezone[]> {
+        const tableName = await resolveTableName();
         const results: UserTimezone[] = [];
         for (let i = 0; i < userIds.length; i += 100) {
             const chunk = userIds.slice(i, i + 100);
@@ -84,11 +119,11 @@ class AWSService {
 
             try {
                 const command = new BatchGetCommand({
-                    RequestItems: { [RESOLVED_TABLE]: { Keys: keys } }
+                    RequestItems: { [tableName]: { Keys: keys } }
                 });
                 const response = await docClient.send(command);
-                if (response.Responses && response.Responses[RESOLVED_TABLE]) {
-                    results.push(...(response.Responses[RESOLVED_TABLE] as UserTimezone[]));
+                if (response.Responses && response.Responses[tableName]) {
+                    results.push(...(response.Responses[tableName] as UserTimezone[]));
                 }
             } catch (e) {
                 console.error("DynamoDB Batch Error:", e);

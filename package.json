@@ -2,26 +2,34 @@
     "name": "xihuitl",
     "version": "1.0.0",
     "main": "dist/index.js",
-    "scripts": {
-      "start": "node dist/index.js",
-      "dev": "ts-node src/index.ts",
-      "build": "tsc",
-      "deploy-commands": "ts-node src/utils/deploy-commands.ts"
-    },
-    "dependencies": {
-      "@aws-sdk/client-dynamodb": "^3.400.0",
-      "@aws-sdk/lib-dynamodb": "^3.400.0",
-      "discord.js": "^14.13.0",
-      "dotenv": "^16.3.1",
-      "geo-tz": "^7.0.1",
-      "luxon": "^3.4.3",
-      "node-geocoder": "^4.2.0"
-    },
-    "devDependencies": {
-      "@types/luxon": "^3.3.2",
-      "@types/node": "^20.6.0",
-      "@types/node-geocoder": "^4.2.2",
-      "ts-node": "^10.9.1",
-      "typescript": "^5.2.2"
-    }
+  "scripts": {
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts",
+    "build": "tsc",
+    "deploy-commands": "ts-node src/utils/deploy-commands.ts",
+    "cdk:synth": "cdk synth",
+    "cdk:deploy": "cdk deploy",
+    "cdk:destroy": "cdk destroy",
+    "cdk:diff": "cdk diff"
+  },
+  "dependencies": {
+    "@aws-sdk/client-dynamodb": "^3.400.0",
+    "@aws-sdk/client-ssm": "^3.400.0",
+    "@aws-sdk/lib-dynamodb": "^3.400.0",
+    "aws-cdk-lib": "^2.100.0",
+    "constructs": "^10.3.0",
+    "discord.js": "^14.13.0",
+    "dotenv": "^16.3.1",
+    "geo-tz": "^7.0.1",
+    "luxon": "^3.4.3",
+    "node-geocoder": "^4.2.0"
+  },
+  "devDependencies": {
+    "@types/luxon": "^3.3.2",
+    "@types/node": "^20.6.0",
+    "@types/node-geocoder": "^4.2.2",
+    "source-map-support": "^0.5.21",
+    "ts-node": "^10.9.1",
+    "typescript": "^5.2.2"
+  }
   }

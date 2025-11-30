@@ -1,27 +1,126 @@
 # Xihuitl
 
-## Environment Variables
-Create a `.env` in the project root with at least:
+A Discord bot that helps users manage and display timezones across different locations.
+
+## Project Structure
 
 ```
-DISCORD_TOKEN=...
-CLIENT_ID=...
-AWS_REGION=us-east-1
-DYNAMO_TABLE={tablename}
-EC2_HOST={host}
-SSH_KEY=./my-key.pem
-EC2_USER={user}
+Xihuitl/
+├── src/                    # Discord bot application code
+│   ├── commands/          # Bot slash commands
+│   ├── services/          # AWS and geo services
+│   └── index.ts           # Bot entry point
+├── infra/                 # AWS CDK infrastructure code
+│   ├── bin/infra.ts      # CDK app entry
+│   └── lib/xiuh-stack.ts # Stack definition
+├── dist/                  # Compiled JavaScript (gitignored)
+├── package.json
+├── tsconfig.json          # TypeScript config for bot
+├── cdk.json              # CDK configuration
+├── Makefile              # Deployment commands
+└── CDK_SETUP.md          # Detailed infrastructure setup guide
+```
+
+## Quick Start
+
+### 1. Infrastructure Setup (One-time)
+
+Deploy AWS infrastructure using CDK:
+
+```bash
+# Install dependencies
+npm install
+
+# Deploy infrastructure (EC2, DynamoDB, IAM, etc.)
+npm run cdk:deploy
+```
+
+See **[CDK_SETUP.md](CDK_SETUP.md)** for detailed setup instructions including:
+- AWS credentials configuration
+- CDK bootstrap
+- SSM parameter setup
+- EC2 key pair creation
+
+### 2. Environment Variables
+
+Create a `.env` in the project root:
+
+```bash
+# Discord Configuration
+DISCORD_TOKEN=your_discord_bot_token_here
+DISCORD_CLIENT_ID=your_client_id_here
+
+# AWS Configuration
+AWS_REGION=your_region
+DYNAMO_TABLE=table_name
+
+# EC2 Deployment Configuration
+EC2_HOST=ec2_host_address  # From CDK outputs
+EC2_USER=ec2_user
+SSH_KEY=~/.ssh/key.pem
 REMOTE_DIR=/home/ec2-user/xiuh-bot
-# optional overrides:
-# NODE_BIN=/usr/bin/node
-# SERVICE_FILE=/etc/systemd/system/discordbot.service
 ```
 
-## Deploying
-1. **First-time setup:** `make bootstrap`  
-   Installs Node.js on the EC2 host (if missing), creates the remote working directory, and provisions the `discordbot` systemd service.
-2. **Regular deploys:** `make deploy`  
-   Builds the TypeScript project, bundles artifacts, uploads them to EC2, installs production dependencies, and restarts the systemd service.
-3. **Slash commands:** After changing `/time`, run `make deploy.commands` locally to refresh Discord slash commands.
+### 3. Deploy Bot Application
 
-Monitor the bot with `ssh -i $SSH_KEY $EC2_USER@$EC2_HOST` and `journalctl -u discordbot -f`.
+```bash
+# Build and deploy bot code to EC2
+make deploy
+```
+
+### 4. Register Slash Commands
+
+```bash
+# Register Discord slash commands
+make deploy.commands
+```
+
+## Development
+
+```bash
+# Run bot locally (requires AWS credentials)
+npm run dev
+
+# Build TypeScript
+npm run build
+
+# Start compiled bot
+npm start
+```
+
+## Infrastructure Management
+
+```bash
+# View infrastructure changes
+npm run cdk:diff
+
+# Update infrastructure
+npm run cdk:deploy
+
+# Destroy infrastructure (WARNING: deletes EC2)
+npm run cdk:destroy
+```
+
+## Monitoring
+
+SSH into your EC2 instance to monitor the bot:
+
+```bash
+ssh -i ~/.ssh/xiuh-bot-key.pem ec2-user@YOUR_EC2_IP
+
+# Check bot status
+sudo systemctl status xiuh-bot
+
+# View logs
+sudo journalctl -u xiuh-bot -f
+```
+
+## Architecture
+
+- **EC2 Instance** (t3.micro): Runs the Discord bot 24/7
+- **DynamoDB**: Stores user timezone preferences
+- **IAM Role**: Grants EC2 permissions for DynamoDB and SSM
+- **Security Group**: SSH access for deployment
+- **SSM Parameter Store**: Manages configuration secrets
+
+See `infra/` directory for complete infrastructure code.

@@ -1,25 +1,20 @@
 # Environment & Secrets
-# Environment variables (Discord token, AWS credentials, etc.)
 .env
-# SSH keys for EC2 access
 *.pem
 
 # Dependencies
-# NPM packages
 node_modules/
 
 # Build Outputs
-# Compiled TypeScript (bot application)
 dist/
-# Deployment package
 bot-deploy.tar.gz
 
 # CDK Infrastructure
-# CDK synthesized CloudFormation templates
 cdk.out/
-# CDK context cache (VPC lookups, etc.) - Actually should be committed per AWS best practice
 cdk.context.json
 
 # System Files
-# macOS finder metadata
 .DS_Store
+
+# VSCode files
+.vscode/

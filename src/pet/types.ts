@@ -14,7 +14,6 @@ export interface PetSpecies {
     id: string;
     name: string;
     type: PetType;
-    image_url: string;
 }
 
 // Item traits determine what actions can be performed with items

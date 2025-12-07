@@ -1,5 +1,5 @@
 import { dynamoDBService, resolveTableName } from "../../services/dynamodb.service";
-import { Pet, HungerState } from "../types";
+import { Pet, HungerState, PetSpecies } from "../types";
 
 // Table name cache
 const petsTableCache: { value: string | null } = { value: null };
@@ -7,6 +7,7 @@ const petsTableCache: { value: string | null } = { value: null };
 async function resolvePetsTableName(): Promise<string> {
     return resolveTableName("PETS_TABLE", "/xiuh/pets-table-name", petsTableCache);
 }
+
 
 const HUNGER_DECAY_RATE = 1; // points per hour
 const HUNGER_MAX = 100;
@@ -124,6 +125,10 @@ export class PetService {
         const value = calculateHungerValue(pet.last_fed_at);
         const state = getHungerState(value);
         return { value, state };
+    }
+
+    public getSpeciesImageUrl(species: PetSpecies): string {
+        return `https://xiuh-pet-images.s3.us-east-2.amazonaws.com/${species.id.toLowerCase()}.png`
     }
 }
 

@@ -93,7 +93,7 @@ export class XiuhStack extends cdk.Stack {
     // S3 Bucket for Pet Images
     // ========================================
     const petImagesBucket = new s3.Bucket(this, 'PetImagesBucket', {
-      bucketName: `xiuh-pet-images-${this.account}-${this.region}`,
+      bucketName: `xiuh-pet-images`,
       publicReadAccess: false,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
       autoDeleteObjects: false,

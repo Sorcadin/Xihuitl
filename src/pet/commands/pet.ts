@@ -166,19 +166,17 @@ async function handleInfo(interaction: ChatInputCommandInteraction) {
 
     const hunger = petService.getCurrentHunger(pet);
     const hungerEmoji = HUNGER_STATE_EMOJIS[hunger.state] || '⚪';
-    const lastFedDate = new Date(pet.last_fed_at);
-    const hoursSinceFed = (Date.now() - pet.last_fed_at) / (1000 * 60 * 60);
+    const daysSinceAdopted = Math.floor(Date.now() - pet.adopted_at) / (1000 * 60 * 60 * 24)
 
     const embed = new EmbedBuilder()
         .setTitle(`${species.name} - ${pet.name}`)
         .setThumbnail(species.image_url)
         .setColor(0x0099FF)
         .addFields(
-            { name: 'Species', value: species.name, inline: true },
             { name: 'Name', value: pet.name, inline: true },
-            { name: 'Hunger', value: `${hungerEmoji} ${hunger.state.charAt(0).toUpperCase() + hunger.state.slice(1)} (${Math.round(hunger.value)}/100)`, inline: true },
-            { name: 'Last Fed', value: `<t:${Math.floor(pet.last_fed_at / 1000)}:R>`, inline: true },
-            { name: 'Adopted', value: `<t:${Math.floor(pet.adopted_at / 1000)}:D>`, inline: true }
+            { name: 'Species', value: species.name, inline: true },
+            { name: 'Hunger', value: `${hungerEmoji} ${hunger.state.charAt(0).toUpperCase() + hunger.state.slice(1)}`, inline: true },
+            { name: 'Age', value: `${daysSinceAdopted}`, inline: true }
         );
 
     await interaction.editReply({ embeds: [embed] });
@@ -230,8 +228,7 @@ async function handleFeed(interaction: ChatInputCommandInteraction) {
             .setDescription(`You fed ${pet.name} a **${itemDef.name}**!`)
             .setColor(0x00FF00)
             .addFields(
-                { name: 'Hunger Restored', value: `+${itemDef.hungerRestoration} points`, inline: true },
-                { name: 'Current Hunger', value: `${hungerEmoji} ${result.newState.charAt(0).toUpperCase() + result.newState.slice(1)} (${Math.round(result.newHunger)}/100)`, inline: true }
+                { name: 'Current Hunger', value: `${hungerEmoji} ${result.newState.charAt(0).toUpperCase() + result.newState.slice(1)}`, inline: true }
             );
 
         await interaction.editReply({ embeds: [embed] });
@@ -350,7 +347,7 @@ async function handleBag(interaction: ChatInputCommandInteraction) {
             await inventoryService.removeItem(userId, itemId, 1, 'inventory');
 
             const hungerEmoji = HUNGER_STATE_EMOJIS[result.newState] || '⚪';
-            await interaction.editReply(`✅ Used **${itemDef.name}**! Your pet's hunger is now ${hungerEmoji} ${result.newState.charAt(0).toUpperCase() + result.newState.slice(1)}.`);
+            await interaction.editReply(`✅ Used **${itemDef.name}**!\nYour pet's hunger is now ${hungerEmoji} ${result.newState.charAt(0).toUpperCase() + result.newState.slice(1)}.`);
         } catch (error) {
             console.error('Error using item:', error);
             await interaction.editReply('❌ An error occurred while using the item.');

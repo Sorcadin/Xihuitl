@@ -5,6 +5,7 @@ import * as iam from 'aws-cdk-lib/aws-iam';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
 import * as s3 from 'aws-cdk-lib/aws-s3';
+import * as s3deploy from 'aws-cdk-lib/aws-s3-deployment';
 
 /**
  * Xihuitl Discord Bot Stack
@@ -93,7 +94,7 @@ export class XiuhStack extends cdk.Stack {
     // ========================================
     const petImagesBucket = new s3.Bucket(this, 'PetImagesBucket', {
       bucketName: `xiuh-pet-images-${this.account}-${this.region}`,
-      publicReadAccess: true,
+      publicReadAccess: false,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
       autoDeleteObjects: false,
     });
@@ -198,7 +199,7 @@ export class XiuhStack extends cdk.Stack {
     inventoryTable.grantReadWriteData(botRole);
 
     // Grant S3 read permissions for pet images
-    petImagesBucket.grantRead(botRole);
+    petImagesBucket.grantReadWrite(botRole);
 
     // Grant SSM Parameter Store read permissions
     botRole.addToPolicy(
@@ -295,6 +296,15 @@ export class XiuhStack extends cdk.Stack {
           }),
         },
       ],
+    });
+
+    // ========================================
+    // S3 Bucket Deployment
+    // ========================================
+    new s3deploy.BucketDeployment(this, 'DeployPetImages', {
+      destinationBucket: petImagesBucket, 
+      sources: [s3deploy.Source.asset('./assets')],
+      prune: true, 
     });
 
     // ========================================

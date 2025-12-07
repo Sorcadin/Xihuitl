@@ -24,24 +24,6 @@ The CDK stack (`XiuhStack`) provisions:
 - **Security Group** (`xiuh-bot-sg`) - SSH access for deployment
 - **SSM Parameters** - Configuration management
 
-## Commands
-
-Run these from the **project root** (not this directory):
-
-```bash
-# Synthesize CloudFormation template
-npm run cdk:synth
-
-# Deploy infrastructure
-npm run cdk:deploy
-
-# View infrastructure changes
-npm run cdk:diff
-
-# Destroy infrastructure
-npm run cdk:destroy
-```
-
 ## Setup
 
 See the main `CDK_SETUP.md` in the project root for complete setup instructions.

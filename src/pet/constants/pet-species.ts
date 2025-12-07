@@ -2,37 +2,37 @@ import { PetSpecies } from '../types';
 
 export const PET_SPECIES: Record<string, PetSpecies> = {
     VIGILUP: {
-        id: 'vigilup',
+        id: 'VIGILUP',
         name: 'Vigilup',
         image_url: 'https://cdn.discordapp.com/attachments/placeholder/vigilup.png',
         type: 'beast'
     },
     ARCHINO: {
-        id: 'archino',
+        id: 'ARCHINO',
         name: 'Archino',
         image_url: 'https://cdn.discordapp.com/attachments/placeholder/archino.png',
         type: 'beast'
     },
     ANOBITE: {
-        id: 'anobite',
+        id: 'ANOBITE',
         name: 'Anobite',
         image_url: 'https://cdn.discordapp.com/attachments/placeholder/anobite.png',
         type: 'insect'
     },
     CLADILY: {
-        id: 'cladily',
+        id: 'CLADILY',
         name: 'Cladily',
         image_url: 'https://cdn.discordapp.com/attachments/placeholder/cladily.png',
         type: 'plant'
     },
     HULLET: {
-        id: 'hullet',
+        id: 'HULLET',
         name: 'Hullet',
         image_url: 'https://cdn.discordapp.com/attachments/placeholder/hullet.png',
         type: 'plant'
     },
     GYTOP: {
-        id: 'gytop',
+        id: 'GYTOP',
         name: 'Gytop',
         image_url: 'https://cdn.discordapp.com/attachments/placeholder/gytop.png',
         type: 'construct'

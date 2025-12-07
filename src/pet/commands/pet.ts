@@ -473,7 +473,7 @@ async function handleStorage(interaction: ChatInputCommandInteraction) {
             const itemName = itemDef ? itemDef.name : itemId;
             await interaction.editReply(`✅ Withdrew ${quantity}x **${itemName}** from storage!`);
         } catch (error: any) {
-            await interaction.editReply(`❌ ${error.message || 'Failed to store item.'}`);
+            await interaction.editReply(`❌ ${error.message || 'Failed to withdraw item.'}`);
         }
     }
 }

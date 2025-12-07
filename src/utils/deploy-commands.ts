@@ -1,6 +1,7 @@
 import { REST, Routes } from 'discord.js';
 import * as dotenv from 'dotenv';
-import { timeCommand } from '../commands/time';
+import { timeCommand } from '../time/commands/time';
+import { petCommand } from '../pet/commands/pet';
 
 dotenv.config();
 

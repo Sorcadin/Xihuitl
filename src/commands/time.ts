@@ -1,4 +1,4 @@
-import { SlashCommandBuilder, EmbedBuilder, ChatInputCommandInteraction, Message } from 'discord.js';
+import { SlashCommandBuilder, ChatInputCommandInteraction, Message } from 'discord.js';
 import { DateTime } from 'luxon';
 import { userTimezoneService } from '../services/timezone.service';
 import { getTimezoneFromLocation } from '../services/geo.service';
@@ -6,6 +6,12 @@ import { Command } from '../types';
 
 const COOLDOWN_MS = 2 * 60 * 60 * 1000;
 const lastReplyTimes = new Map<string, number>();
+
+const TIME_FORMAT_OPTIONS = { weekday: 'short' as const, hour: '2-digit' as const, minute: '2-digit' as const };
+
+const formatTime = (time: DateTime): string => {
+    return time.toLocaleString(TIME_FORMAT_OPTIONS);
+};
 
 export const timeCommand: Command = {
     data: new SlashCommandBuilder()
@@ -42,11 +48,7 @@ export const timeCommand: Command = {
 
             await userTimezoneService.saveUser(interaction.user.id, result.timezone, result.address);
             
-            const embed = new EmbedBuilder()
-                .setTitle("📍 Location Updated")
-                .setColor("Green")
-                .setDescription(`**<@${interaction.user.id}>** set to:\n\`${result.address}\``);
-            await interaction.editReply({ embeds: [embed] });
+            await interaction.editReply(`📍 **Location Updated**\n<@${interaction.user.displayName}> set to: \`${result.address}\``);
         }
 
         else if (sub === 'get') {
@@ -65,11 +67,8 @@ export const timeCommand: Command = {
                     return;
                 }
                 const time = DateTime.now().setZone(data.timezone);
-                const embed = new EmbedBuilder()
-                    .setColor("Blue")
-                    .setAuthor({ name: user.username, iconURL: user.displayAvatarURL() })
-                    .setDescription(`🕒 **${time.toFormat("hh:mm a")}**\n📍 ${data.display_location}`);
-                await interaction.reply({ embeds: [embed] });
+                await interaction.reply(`Time for **${user.displayName}**\n\`${formatTime(time)}\``);
+
             } 
             else if (location) {
                 await interaction.deferReply();
@@ -79,11 +78,7 @@ export const timeCommand: Command = {
                     return;
                 }
                 const time = DateTime.now().setZone(result.timezone);
-                const embed = new EmbedBuilder()
-                    .setTitle(`🕒 Time in ${result.address}`)
-                    .setColor("Orange")
-                    .setDescription(`**${time.toFormat("hh:mm a LLL dd")}**`);
-                await interaction.editReply({ embeds: [embed] });
+                await interaction.editReply(`Time in **${result.address}**\n\`${formatTime(time)}\``);
             }
         }
 
@@ -100,57 +95,41 @@ export const timeCommand: Command = {
                 return;
             }
 
-            // Group users by timezone
-            const timezoneGroups = new Map<string, typeof usersData>();
+            // Group users by timezone abbreviation
+            const timezoneGroups = new Map<string, { abbreviation: string; users: typeof usersData; offset: number }>();
             for (const user of usersData) {
-                if (!timezoneGroups.has(user.timezone)) {
-                    timezoneGroups.set(user.timezone, []);
+                const time = DateTime.now().setZone(user.timezone);
+                const abbreviation = time.offsetNameLong || time.toFormat('ZZZZZ');
+                
+                if (!timezoneGroups.has(abbreviation)) {
+                    timezoneGroups.set(abbreviation, {
+                        abbreviation,
+                        users: [],
+                        offset: time.offset
+                    });
                 }
-                timezoneGroups.get(user.timezone)!.push(user);
+                timezoneGroups.get(abbreviation)!.users.push(user);
             }
 
-            const getTimeOfDayEmoji = (hour: number): string => {
-                if (hour >= 6 && hour < 18) return '☀️'; // Day
-                return '🌕'; // Night
-            };
-
             // Build the formatted output
-            const timezoneEntries = Array.from(timezoneGroups.entries()).map(([timezone, users]) => {
-                const time = DateTime.now().setZone(timezone);
-                const offsetMinutes = time.offset;
+            const timezoneEntries = Array.from(timezoneGroups.values()).map(({ abbreviation, users, offset }) => {
+                // Get a representative time from the first user in this group
+                const representativeTimezone = users[0].timezone;
+                const time = DateTime.now().setZone(representativeTimezone);
                 
-                // Format offset as UTC±HH or UTC±HH:MM (e.g., UTC+05, UTC-08:00)
-                const offsetHours = Math.floor(Math.abs(offsetMinutes) / 60);
-                const offsetMins = Math.abs(offsetMinutes) % 60;
-                const offsetSign = offsetMinutes >= 0 ? '+' : '-';
-                const offsetString = offsetMins === 0
-                    ? `UTC${offsetSign}${offsetHours.toString().padStart(2, '0')}`
-                    : `UTC${offsetSign}${offsetHours.toString().padStart(2, '0')}:${offsetMins.toString().padStart(2, '0')}`;
-                
-                // Use canonical IANA timezone identifier (e.g., "America/New_York")
-                const zoneName = timezone.replace(/_/g, ' ');
-
                 // Format users in this timezone
                 const userList = users.map(u => {
                     const member = members.get(u.user_id);
-                    return `\u2003${member?.displayName || "Unknown"}`;
+                    return `\t${member?.displayName || "Unknown"}`;
                 }).join("\n");
 
-                const emoji = getTimeOfDayEmoji(time.hour);
-
                 return {
-                    offset: offsetMinutes,
-                    text: `${emoji} \`${time.toFormat("hh:mm a LLL dd")}\` - **${zoneName}**\n${userList}`
+                    offset: offset,
+                    text: `\`${formatTime(time)}\` - **${abbreviation}**\n${userList}`
                 };
             }).sort((a, b) => a.offset - b.offset);
 
-            const description = timezoneEntries.map(e => e.text).join("\n");
-
-            const embed = new EmbedBuilder()
-                .setTitle("🌎 Server Timezones")
-                .setColor("Blurple")
-                .setDescription(description);
-            await interaction.editReply({ embeds: [embed] });
+            await interaction.editReply(timezoneEntries.map(e => e.text).join("\n"));
         }
     }
 };
@@ -171,7 +150,7 @@ export const handleTimeMentions = async (message: Message) => {
         if (data) {
             const time = DateTime.now().setZone(data.timezone);
             const displayName = message.guild?.members.cache.get(userId)?.displayName ?? user.username;
-            await message.channel.send(`It is **${time.toFormat("hh:mm a")}** for ${displayName}.`);
+            await message.channel.send(`It is **${formatTime(time)}** for ${displayName}.`);
             lastReplyTimes.set(userId, now);
         }
     }

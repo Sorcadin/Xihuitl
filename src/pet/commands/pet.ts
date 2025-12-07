@@ -4,7 +4,7 @@ import { MAX_INVENTORY_CAPACITY } from '../types';
 import { petService } from '../services/pet.service';
 import { inventoryService } from '../services/inventory.service';
 import { getAllSpecies, getSpeciesById } from '../constants/pet-species';
-import { getItemById, getRandomOmelette, ITEM_DEFINITIONS } from '../constants/items';
+import { getItemById, getRandomOmelette, hasTrait } from '../constants/items';
 
 const HUNGER_STATE_EMOJIS: Record<string, string> = {
     'full': '🟢',
@@ -12,7 +12,6 @@ const HUNGER_STATE_EMOJIS: Record<string, string> = {
     'fine': '🟠',
     'hungry': '🟠',
     'starving': '🔴',
-    'fainting': '⚫'
 };
 
 export const petCommand: Command = {
@@ -198,12 +197,18 @@ async function handleFeed(interaction: ChatInputCommandInteraction) {
         return;
     }
 
-    // Check if item exists and is a food item
+    // Check if item exists
     const itemDef = getItemById(itemId);
     if (!itemDef) {
         await interaction.editReply('❌ Invalid item selected.');
         return;
     }
+
+    // Check if item is edible
+    if (!hasTrait(itemDef, 'edible')) {
+        await interaction.editReply('❌ This item cannot be fed to pets!');
+        return;
+    } 
 
     // Check if user has the item in inventory
     const hasItem = await inventoryService.hasItem(userId, itemId, 1, 'inventory');
@@ -214,7 +219,7 @@ async function handleFeed(interaction: ChatInputCommandInteraction) {
 
     try {
         // Feed the pet
-        const result = await petService.feedPet(userId, itemDef.hungerRestoration);
+        const result = await petService.feedPet(userId, itemDef.hungerRestoration!);
         
         // Remove item from inventory
         await inventoryService.removeItem(userId, itemId, 1, 'inventory');
@@ -315,10 +320,16 @@ async function handleBag(interaction: ChatInputCommandInteraction) {
             return;
         }
 
-        // For now, "use" means feed if it's a food item
+        // "use" means feed if it's an edible item
         const itemDef = getItemById(itemId);
         if (!itemDef) {
             await interaction.editReply('❌ Invalid item.');
+            return;
+        }
+
+        // Check if item is edible
+        if (!hasTrait(itemDef, 'edible')) {
+            await interaction.editReply('❌ This item cannot be used to feed pets!');
             return;
         }
 
@@ -335,7 +346,7 @@ async function handleBag(interaction: ChatInputCommandInteraction) {
         }
 
         try {
-            const result = await petService.feedPet(userId, itemDef.hungerRestoration);
+            const result = await petService.feedPet(userId, itemDef.hungerRestoration!);
             await inventoryService.removeItem(userId, itemId, 1, 'inventory');
 
             const hungerEmoji = HUNGER_STATE_EMOJIS[result.newState] || '⚪';
@@ -364,7 +375,7 @@ async function handleDaily(interaction: ChatInputCommandInteraction) {
             .setColor(0xFFD700)
             .addFields(
                 { name: 'Item', value: omelette.name, inline: true },
-                { name: 'Hunger Restoration', value: `+${omelette.hungerRestoration}`, inline: true }
+                { name: 'Description', value: `+${omelette.description}`, inline: true }
             );
 
         await interaction.editReply({ embeds: [embed] });
@@ -386,13 +397,14 @@ export async function handleFeedAutocomplete(interaction: AutocompleteInteractio
         const userId = interaction.user.id;
         const inventory = await inventoryService.getInventory(userId);
         
-        // Filter to only food items
-        const foodItems = inventory.filter(item => {
+        // Filter to only edible items
+        const edibleItems = inventory.filter(item => {
             const baseItemId = inventoryService.extractItemId(item.item_id);
-            return ITEM_DEFINITIONS.some(def => def.id === baseItemId);
+            const itemDef = getItemById(baseItemId);
+            return itemDef && hasTrait(itemDef, 'edible');
         });
 
-        const choices = foodItems.map(item => {
+        const choices = edibleItems.map(item => {
             const baseItemId = inventoryService.extractItemId(item.item_id);
             const itemDef = getItemById(baseItemId);
             return {

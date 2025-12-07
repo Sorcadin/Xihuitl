@@ -4,8 +4,8 @@ export type PetType = 'beast' | 'plant' | 'insect' | 'construct' | 'undead' | 'f
 
 export interface Pet {
     user_id: string;
-    species_id: string;
     name: string;
+    species_id: string;
     last_fed_at: number;
     adopted_at: number;
 }

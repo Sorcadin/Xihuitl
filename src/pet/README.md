@@ -35,6 +35,7 @@ Discord slash command with subcommands:
 - `/pet info` - View pet information (hunger, species, stats)
 - `/pet bag` - Manage inventory and storage (view, store, use items)
 - `/pet daily` - Claim daily reward
+- `/pet rename` - Rename pet
 
 ### Services
 

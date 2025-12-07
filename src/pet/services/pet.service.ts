@@ -80,6 +80,23 @@ export class PetService {
         this.cache.set(userId, pet);
     }
 
+    public async renamePet(userId: string, name: string): Promise<void> {
+        const pet = await this.getPet(userId);
+        if (!pet) {
+            throw new Error("Pet not found");
+        }
+        
+        const tableName = await resolvePetsTableName();
+        const updatedPet: Pet = {
+            ...pet,
+            name: name
+        };
+
+        await dynamoDBService.putItem(tableName, updatedPet);
+        (updatedPet as any).cached_at = Date.now();
+        this.cache.set(userId, pet);
+    }
+
     public async feedPet(userId: string, hungerRestoration: number): Promise<{ newHunger: number; newState: HungerState }> {
         const pet = await this.getPet(userId);
         if (!pet) {

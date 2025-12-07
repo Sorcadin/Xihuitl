@@ -49,6 +49,17 @@ export const petCommand: Command = {
                 .setAutocomplete(true)
             )
         )
+        .addSubcommand(sub =>
+            sub.setName('rename')
+            .setDescription('Rename your pet')
+            .addStringOption(opt =>
+                opt.setName('name')
+                .setDescription('Rename your pet')
+                .setRequired(true)
+                .setMinLength(1)
+                .setMaxLength(20)
+            )
+        )
         .addSubcommand(sub => 
             sub.setName('bag')
             .setDescription('Manage your inventory')
@@ -235,6 +246,52 @@ async function handleFeed(interaction: ChatInputCommandInteraction) {
     } catch (error) {
         console.error('Error feeding pet:', error);
         await interaction.editReply('❌ An error occurred while feeding your pet.');
+    }
+}
+
+async function handleRename(interaction: ChatInputCommandInteraction) {
+    await interaction.deferReply();
+
+    const userId = interaction.user.id;
+    const name = interaction.options.getString('name', true);
+
+    // Check if user already has a pet
+    const pet = await petService.getPet(userId);
+    if (!pet) {
+        await interaction.editReply('❌ You don\'t have a pet! Use `/pet adopt` to adopt one.');
+        return;
+    }
+
+    const species = getSpeciesById(pet.species_id)
+    if (!species) {
+        await interaction.editReply('❌ Your pet\'s species data is invalid.');
+        return;
+    }
+
+    const hunger = petService.getCurrentHunger(pet);
+    const hungerEmoji = HUNGER_STATE_EMOJIS[hunger.state] || '⚪';
+    const daysSinceAdopted = Math.floor(Date.now() - pet.adopted_at) / (1000 * 60 * 60 * 24)
+
+    try {
+        await petService.renamePet(userId, name);
+        
+        const embed = new EmbedBuilder()
+            .setTitle('📝 Pet Renamed!')
+            .setDescription(`You've renamed your **${species.name}** to **${name}**!`)
+            .setThumbnail(species.image_url)
+            .setColor(0x00FF00)
+            .addFields(
+                { name: 'Species', value: species.name, inline: true },
+                { name: 'Name', value: name, inline: true },
+                { name: 'Hunger', value: '🟢 Full', inline: true },
+                { name: 'Hunger', value: `${hungerEmoji} ${hunger.state.charAt(0).toUpperCase() + hunger.state.slice(1)}`, inline: true },
+                { name: 'Age', value: `${daysSinceAdopted}`, inline: true }    
+            );
+
+        await interaction.editReply({ embeds: [embed] });
+    } catch (error) {
+        console.error('Error renaming pet:', error);
+        await interaction.editReply('❌ An error occurred while renaming your pet.');
     }
 }
 

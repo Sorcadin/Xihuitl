@@ -9,7 +9,8 @@ const TOKEN = process.env.DISCORD_TOKEN!;
 const DISCORD_CLIENT_ID = process.env.DISCORD_CLIENT_ID!;
 
 const commands = [
-    timeCommand.data.toJSON()
+    timeCommand.data.toJSON(),
+    petCommand.data.toJSON()
 ];
 
 const rest = new REST({ version: '10' }).setToken(TOKEN);

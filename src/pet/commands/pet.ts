@@ -75,18 +75,36 @@ export const petCommand: Command = {
             )
             .addStringOption(opt =>
                 opt.setName('item')
-                .setDescription('Item ID (for store/use actions)')
+                .setDescription('Item ID')
                 .setRequired(false)
             )
             .addIntegerOption(opt =>
                 opt.setName('quantity')
-                .setDescription('Quantity (for store action)')
+                .setDescription('Quantity')
                 .setRequired(false)
                 .setMinValue(1)
             )
+        )
+        .addSubcommand(sub => 
+            sub.setName('storage')
+            .setDescription('Manage your deposit box')
+            .addStringOption(opt =>
+                opt.setName('action')
+                .setDescription('What to do')
+                .setRequired(false)
+                .addChoices(
+                    { name: 'View', value: 'view' },
+                    { name: 'Withdraw', value: 'store' },
+                )
+            )
+            .addStringOption(opt =>
+                opt.setName('item')
+                .setDescription('Item ID')
+                .setRequired(false)
+            )
             .addIntegerOption(opt =>
-                opt.setName('page')
-                .setDescription('Page number (for storage view)')
+                opt.setName('quantity')
+                .setDescription('Quantity')
                 .setRequired(false)
                 .setMinValue(1)
             )
@@ -108,8 +126,14 @@ export const petCommand: Command = {
         else if (sub === 'feed') {
             await handleFeed(interaction);
         }
+        else if (sub === 'rename') {
+            await handleRename(interaction);
+        }
         else if (sub === 'bag') {
             await handleBag(interaction);
+        }
+        else if (sub === 'storage') {
+            await handleStorage(interaction);
         }
         else if (sub === 'daily') {
             await handleDaily(interaction);
@@ -330,24 +354,6 @@ async function handleBag(interaction: ChatInputCommandInteraction) {
             });
         }
 
-        // Storage section
-        if (storage.items.length === 0 && page === 1) {
-            embed.addFields({ name: '🗄️ Storage', value: 'Empty', inline: false });
-        } else if (storage.items.length > 0) {
-            const storageList = storage.items.map(item => {
-                const baseItemId = inventoryService.extractItemId(item.item_id);
-                const itemDef = getItemById(baseItemId);
-                const itemName = itemDef ? itemDef.name : baseItemId;
-                return `• ${itemName} x${item.quantity}`;
-            }).join('\n');
-            const storageFooter = storage.hasMore ? `\n*Page ${page} of ${storage.totalPages}*` : '';
-            embed.addFields({ 
-                name: '🗄️ Storage', 
-                value: storageList + storageFooter, 
-                inline: false 
-            });
-        }
-
         await interaction.editReply({ embeds: [embed] });
     } else if (action === 'store') {
         if (!itemId) {
@@ -408,6 +414,66 @@ async function handleBag(interaction: ChatInputCommandInteraction) {
         } catch (error) {
             console.error('Error using item:', error);
             await interaction.editReply('❌ An error occurred while using the item.');
+        }
+    }
+}
+
+async function handleStorage(interaction: ChatInputCommandInteraction) {
+    await interaction.deferReply();
+
+    const userId = interaction.user.id;
+    const action = interaction.options.getString('action') || 'view';
+    const itemId = interaction.options.getString('item');
+    const quantity = interaction.options.getInteger('quantity') || 1;
+    const page = interaction.options.getInteger('page') || 1;
+
+    if (action === 'view') {
+        const inventory = await inventoryService.getInventory(userId);
+        const inventoryCount = await inventoryService.getItemCount(userId, 'inventory');
+        const storage = await inventoryService.getStorage(userId, page);
+
+        const embed = new EmbedBuilder()
+            .setTitle('🎒 Your Inventory')
+            .setColor(0x0099FF);
+
+        // Storage section
+        if (storage.items.length === 0 && page === 1) {
+            embed.addFields({ name: '🗄️ Storage', value: 'Empty', inline: false });
+        } else if (storage.items.length > 0) {
+            const storageList = storage.items.map(item => {
+                const baseItemId = inventoryService.extractItemId(item.item_id);
+                const itemDef = getItemById(baseItemId);
+                const itemName = itemDef ? itemDef.name : baseItemId;
+                return `• ${itemName} x${item.quantity}`;
+            }).join('\n');
+            const storageFooter = storage.hasMore ? `\n*Page ${page} of ${storage.totalPages}*` : '';
+            embed.addFields({ 
+                name: '🗄️ Storage', 
+                value: storageList + storageFooter, 
+                inline: false 
+            });
+        }
+
+        await interaction.editReply({ embeds: [embed] });
+
+    } else if (action === 'withdraw') {
+        if (!itemId) {
+            await interaction.editReply('❌ Please specify an item to withdraw.');
+            return;
+        }
+
+        try {
+            const moved = await inventoryService.moveItem(userId, itemId, quantity, 'storage', 'inventory');
+            if (!moved) {
+                await interaction.editReply('❌ Failed to withdraw item. Make sure you have enough space in your inventory.');
+                return;
+            }
+
+            const itemDef = getItemById(itemId);
+            const itemName = itemDef ? itemDef.name : itemId;
+            await interaction.editReply(`✅ Withdrew ${quantity}x **${itemName}** from storage!`);
+        } catch (error: any) {
+            await interaction.editReply(`❌ ${error.message || 'Failed to store item.'}`);
         }
     }
 }

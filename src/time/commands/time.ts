@@ -2,7 +2,7 @@ import { SlashCommandBuilder, ChatInputCommandInteraction, Message } from 'disco
 import { DateTime } from 'luxon';
 import { userTimezoneService } from '../services/timezone.service';
 import { getTimezoneFromLocation } from '../services/geo.service';
-import { Command } from '../types';
+import { Command } from '../../types';
 
 const COOLDOWN_MS = 2 * 60 * 60 * 1000;
 const lastReplyTimes = new Map<string, number>();
@@ -155,3 +155,4 @@ export const handleTimeMentions = async (message: Message) => {
         }
     }
 };
+

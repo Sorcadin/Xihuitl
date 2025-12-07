@@ -1,4 +1,4 @@
-import { dynamoDBService, resolveTableName } from "./dynamodb.service";
+import { dynamoDBService, resolveTableName } from "../../services/dynamodb.service";
 import { UserTimezone, TimezoneData } from "../types";
 
 // Table name caches
@@ -104,3 +104,4 @@ export class LocationTimezoneService {
 
 export const userTimezoneService = new UserTimezoneService();
 export const locationTimezoneService = new LocationTimezoneService();
+

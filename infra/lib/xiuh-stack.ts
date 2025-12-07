@@ -4,6 +4,7 @@ import * as ec2 from 'aws-cdk-lib/aws-ec2';
 import * as iam from 'aws-cdk-lib/aws-iam';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
 import * as ssm from 'aws-cdk-lib/aws-ssm';
+import * as s3 from 'aws-cdk-lib/aws-s3';
 
 /**
  * Xihuitl Discord Bot Stack
@@ -52,6 +53,52 @@ export class XiuhStack extends cdk.Stack {
     });
 
     // ========================================
+    // DynamoDB Table for Pets
+    // ========================================
+    const petsTable = new dynamodb.Table(this, 'PetsTable', {
+      tableName: 'xiuh-pets',
+      partitionKey: {
+        name: 'user_id',
+        type: dynamodb.AttributeType.STRING,
+      },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      pointInTimeRecoverySpecification: {
+        pointInTimeRecoveryEnabled: false,
+      },
+    });
+
+    // ========================================
+    // DynamoDB Table for Inventory
+    // ========================================
+    const inventoryTable = new dynamodb.Table(this, 'InventoryTable', {
+      tableName: 'xiuh-inventory',
+      partitionKey: {
+        name: 'user_id',
+        type: dynamodb.AttributeType.STRING,
+      },
+      sortKey: {
+        name: 'item_id',
+        type: dynamodb.AttributeType.STRING,
+      },
+      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      pointInTimeRecoverySpecification: {
+        pointInTimeRecoveryEnabled: false,
+      },
+    });
+
+    // ========================================
+    // S3 Bucket for Pet Images
+    // ========================================
+    const petImagesBucket = new s3.Bucket(this, 'PetImagesBucket', {
+      bucketName: `xiuh-pet-images-${this.account}-${this.region}`,
+      publicReadAccess: true,
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
+      autoDeleteObjects: false,
+    });
+
+    // ========================================
     // SSM Parameters for Configuration
     // ========================================
     
@@ -68,6 +115,27 @@ export class XiuhStack extends cdk.Stack {
       stringValue: timezoneTable.tableName,
       description: 'DynamoDB table name for timezone data',
       tier: ssm.ParameterTier.STANDARD, // Free tier
+    });
+
+    new ssm.StringParameter(this, 'PetsTableNameParameter', {
+      parameterName: '/xiuh/pets-table-name',
+      stringValue: petsTable.tableName,
+      description: 'DynamoDB table name for pets',
+      tier: ssm.ParameterTier.STANDARD,
+    });
+
+    new ssm.StringParameter(this, 'InventoryTableNameParameter', {
+      parameterName: '/xiuh/inventory-table-name',
+      stringValue: inventoryTable.tableName,
+      description: 'DynamoDB table name for inventory',
+      tier: ssm.ParameterTier.STANDARD,
+    });
+
+    new ssm.StringParameter(this, 'PetImagesBucketNameParameter', {
+      parameterName: '/xiuh/pet-images-bucket-name',
+      stringValue: petImagesBucket.bucketName,
+      description: 'S3 bucket name for pet images',
+      tier: ssm.ParameterTier.STANDARD,
     });
 
     // Reference to existing parameters that user must create manually:
@@ -126,6 +194,11 @@ export class XiuhStack extends cdk.Stack {
     // Grant DynamoDB permissions
     userTable.grantReadWriteData(botRole);
     timezoneTable.grantReadWriteData(botRole);
+    petsTable.grantReadWriteData(botRole);
+    inventoryTable.grantReadWriteData(botRole);
+
+    // Grant S3 read permissions for pet images
+    petImagesBucket.grantRead(botRole);
 
     // Grant SSM Parameter Store read permissions
     botRole.addToPolicy(
@@ -213,7 +286,6 @@ export class XiuhStack extends cdk.Stack {
       vpcSubnets: {
         subnetType: ec2.SubnetType.PUBLIC,
       },
-      // Use GP3 volumes (better performance, free tier eligible)
       blockDevices: [
         {
           deviceName: '/dev/xvda',
@@ -256,6 +328,24 @@ export class XiuhStack extends cdk.Stack {
       value: timezoneTable.tableName,
       description: 'DynamoDB Table Name for timezone data',
       exportName: 'XiuhTimezoneTable',
+    });
+
+    new cdk.CfnOutput(this, 'PetsTableName', {
+      value: petsTable.tableName,
+      description: 'DynamoDB Table Name for pets',
+      exportName: 'XiuhPetsTable',
+    });
+
+    new cdk.CfnOutput(this, 'InventoryTableName', {
+      value: inventoryTable.tableName,
+      description: 'DynamoDB Table Name for inventory',
+      exportName: 'XiuhInventoryTable',
+    });
+
+    new cdk.CfnOutput(this, 'PetImagesBucketName', {
+      value: petImagesBucket.bucketName,
+      description: 'S3 Bucket Name for pet images',
+      exportName: 'XiuhPetImagesBucket',
     });
 
     new cdk.CfnOutput(this, 'BotRoleArn', {

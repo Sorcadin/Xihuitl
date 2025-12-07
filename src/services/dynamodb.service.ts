@@ -1,5 +1,5 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, PutCommand, BatchGetCommand, GetCommand } from "@aws-sdk/lib-dynamodb";
+import { DynamoDBDocumentClient, PutCommand, BatchGetCommand, GetCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
 import { SSMClient, GetParameterCommand } from "@aws-sdk/client-ssm";
 import * as dotenv from "dotenv";
 
@@ -128,6 +128,36 @@ export class DynamoDBService {
         }
         
         return results;
+    }
+
+    /**
+     * Query items from a DynamoDB table
+     */
+    async queryItems<T>(
+        tableName: string,
+        keyConditionExpression: string,
+        expressionAttributeValues: Record<string, any>,
+        limit?: number,
+        exclusiveStartKey?: Record<string, any>
+    ): Promise<{ items: T[]; lastEvaluatedKey?: Record<string, any> }> {
+        try {
+            const command = new QueryCommand({
+                TableName: tableName,
+                KeyConditionExpression: keyConditionExpression,
+                ExpressionAttributeValues: expressionAttributeValues,
+                Limit: limit,
+                ExclusiveStartKey: exclusiveStartKey
+            });
+            const response = await docClient.send(command);
+            
+            return {
+                items: (response.Items || []) as T[],
+                lastEvaluatedKey: response.LastEvaluatedKey
+            };
+        } catch (e) {
+            console.error(`DynamoDB Query Error (${tableName}):`, e);
+            return { items: [] };
+        }
     }
 }
 

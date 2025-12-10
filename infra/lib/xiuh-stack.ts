@@ -165,6 +165,11 @@ export class XiuhStack extends cdk.Stack {
     // ========================================
     // Security Group for EC2 Instance
     // ========================================
+    const sshIp = process.env.SSH_DEPLOY_IP;
+    if (!sshIp) {
+        throw new Error('SSH_DEPLOY_IP environment variable is required to deploy infrastructure. Please check your .env file.');
+    }
+  
     const botSecurityGroup = new ec2.SecurityGroup(this, 'BotSecurityGroup', {
       vpc,
       securityGroupName: 'xiuh-bot-sg',
@@ -172,11 +177,10 @@ export class XiuhStack extends cdk.Stack {
       allowAllOutbound: true,
     });
 
-    // Allow SSH access from anywhere (for deployment)
     botSecurityGroup.addIngressRule(
-      ec2.Peer.anyIpv4(),
+      ec2.Peer.ipv4(sshIp), 
       ec2.Port.tcp(22),
-      'Allow SSH access for deployment'
+      'Allow SSH access from deployment machine only'
     );
 
     // ========================================
@@ -199,7 +203,7 @@ export class XiuhStack extends cdk.Stack {
     inventoryTable.grantReadWriteData(botRole);
 
     // Grant S3 read permissions for pet images
-    petImagesBucket.grantReadWrite(botRole);
+    petImagesBucket.grantRead(botRole);
 
     // Grant SSM Parameter Store read permissions
     botRole.addToPolicy(

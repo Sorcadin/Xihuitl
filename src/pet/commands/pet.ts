@@ -1,4 +1,9 @@
-import { SlashCommandBuilder, EmbedBuilder, ChatInputCommandInteraction, AutocompleteInteraction } from 'discord.js';
+import { 
+    SlashCommandBuilder,
+    EmbedBuilder,
+    ChatInputCommandInteraction,
+    AutocompleteInteraction,
+} from 'discord.js';
 import { Command } from '../../types';
 import { MAX_INVENTORY_CAPACITY } from '../types';
 import { petService } from '../services/pet.service';
@@ -6,6 +11,7 @@ import { inventoryService } from '../services/inventory.service';
 import { createPresignedDownloadUrl } from "../../services/s3.service";
 import { getAllSpecies, getSpeciesById } from '../constants/pet-species';
 import { getItemById, getRandomOmelette, hasTrait } from '../constants/items';
+// import { handleAdopt } from './pet-adopt';
 
 const HUNGER_STATE_EMOJIS: Record<string, string> = {
     'full': '🟢',
@@ -179,7 +185,6 @@ async function handleAdopt(interaction: ChatInputCommandInteraction) {
             .addFields(
                 { name: 'Species', value: species.name, inline: true },
                 { name: 'Name', value: name, inline: true },
-                { name: 'Hunger', value: '🟢 Full', inline: true }
             );
 
         await interaction.editReply({ embeds: [embed] });
@@ -221,7 +226,6 @@ async function handleInfo(interaction: ChatInputCommandInteraction) {
         .setThumbnail(finalImageUrl)
         .setColor(0x0099FF)
         .addFields(
-            { name: 'Name', value: pet.name, inline: true },
             { name: 'Species', value: species.name, inline: true },
             { name: 'Hunger', value: `${hungerEmoji} ${hunger.state.charAt(0).toUpperCase() + hunger.state.slice(1)}`, inline: true },
             { name: 'Age', value: `${daysSinceAdopted}`, inline: true }
@@ -263,6 +267,20 @@ async function handleFeed(interaction: ChatInputCommandInteraction) {
         return;
     }
 
+    const species = getSpeciesById(pet.species_id);
+    if (!species) {
+        await interaction.editReply('❌ Your pet\'s species data is invalid.');
+        return;
+    }
+
+    const speciesImageUrl = await createPresignedDownloadUrl(`${species.id.toLowerCase()}`)
+
+    if (!speciesImageUrl) {
+        console.error(`Could not generate image URL for ${species.id.toLowerCase()}.`);
+    } 
+    const finalImageUrl = speciesImageUrl ?? null;
+
+
     try {
         // Feed the pet
         const result = await petService.feedPet(userId, itemDef.hungerRestoration!);
@@ -273,6 +291,7 @@ async function handleFeed(interaction: ChatInputCommandInteraction) {
         const hungerEmoji = HUNGER_STATE_EMOJIS[result.newState] || '⚪';
         const embed = new EmbedBuilder()
             .setTitle('🍽️ Pet Fed!')
+            .setThumbnail(finalImageUrl)
             .setDescription(`You fed ${pet.name} a **${itemDef.name}**!`)
             .setColor(0x00FF00)
             .addFields(

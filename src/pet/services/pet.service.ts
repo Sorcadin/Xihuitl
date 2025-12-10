@@ -1,4 +1,6 @@
 import { dynamoDBService, resolveTableName } from "../../services/dynamodb.service";
+import { createPresignedDownloadUrl } from "../../services/s3.service";
+
 import { Pet, HungerState, PetSpecies } from "../types";
 
 // Table name cache
@@ -125,10 +127,6 @@ export class PetService {
         const value = calculateHungerValue(pet.last_fed_at);
         const state = getHungerState(value);
         return { value, state };
-    }
-
-    public getSpeciesImageUrl(species: PetSpecies): string {
-        return `https://xiuh-pet-images.s3.us-east-2.amazonaws.com/${species.id.toLowerCase()}.png`
     }
 }
 

@@ -3,6 +3,7 @@ import { Command } from '../../types';
 import { MAX_INVENTORY_CAPACITY } from '../types';
 import { petService } from '../services/pet.service';
 import { inventoryService } from '../services/inventory.service';
+import { createPresignedDownloadUrl } from "../../services/s3.service";
 import { getAllSpecies, getSpeciesById } from '../constants/pet-species';
 import { getItemById, getRandomOmelette, hasTrait } from '../constants/items';
 
@@ -160,8 +161,12 @@ async function handleAdopt(interaction: ChatInputCommandInteraction) {
         await interaction.editReply('❌ Invalid species selected.');
         return;
     }
-    const speciesImageUrl = petService.getSpeciesImageUrl(species)
+    const speciesImageUrl = await createPresignedDownloadUrl(`${species.id.toLowerCase()}`)
 
+    if (!speciesImageUrl) {
+        console.error(`Could not generate image URL for ${species.id.toLowerCase()}.`);
+    } 
+    const finalImageUrl = speciesImageUrl ?? null;
 
     try {
         await petService.adoptPet(userId, speciesId, name);
@@ -169,7 +174,7 @@ async function handleAdopt(interaction: ChatInputCommandInteraction) {
         const embed = new EmbedBuilder()
             .setTitle('🎉 Pet Adopted!')
             .setDescription(`You've adopted a **${species.name}** named **${name}**!`)
-            .setThumbnail(speciesImageUrl)
+            .setThumbnail(finalImageUrl)
             .setColor(0x00FF00)
             .addFields(
                 { name: 'Species', value: species.name, inline: true },
@@ -203,12 +208,17 @@ async function handleInfo(interaction: ChatInputCommandInteraction) {
 
     const hunger = petService.getCurrentHunger(pet);
     const hungerEmoji = HUNGER_STATE_EMOJIS[hunger.state] || '⚪';
-    const daysSinceAdopted = Math.floor(Date.now() - pet.adopted_at) / (1000 * 60 * 60 * 24)
-    const speciesImageUrl = petService.getSpeciesImageUrl(species)
+    const daysSinceAdopted = Math.floor((Date.now() - pet.adopted_at) / (1000 * 60 * 60 * 24))
+    const speciesImageUrl = await createPresignedDownloadUrl(`${species.id.toLowerCase()}`)
+
+    if (!speciesImageUrl) {
+        console.error(`Could not generate image URL for ${species.id.toLowerCase()}.`);
+    } 
+    const finalImageUrl = speciesImageUrl ?? null;
 
     const embed = new EmbedBuilder()
-        .setTitle(`${species.name} - ${pet.name}`)
-        .setThumbnail(speciesImageUrl)
+        .setTitle(`${pet.name}`)
+        .setThumbnail(finalImageUrl)
         .setColor(0x0099FF)
         .addFields(
             { name: 'Name', value: pet.name, inline: true },
@@ -297,8 +307,14 @@ async function handleRename(interaction: ChatInputCommandInteraction) {
 
     const hunger = petService.getCurrentHunger(pet);
     const hungerEmoji = HUNGER_STATE_EMOJIS[hunger.state] || '⚪';
-    const daysSinceAdopted = Math.floor(Date.now() - pet.adopted_at) / (1000 * 60 * 60 * 24)
-    const speciesImageUrl = petService.getSpeciesImageUrl(species)
+    const daysSinceAdopted = Math.floor((Date.now() - pet.adopted_at) / (1000 * 60 * 60 * 24))
+    const speciesImageUrl = await createPresignedDownloadUrl(`${species.id.toLowerCase()}`)
+
+    if (!speciesImageUrl) {
+        console.error(`Could not generate image URL for ${species.id.toLowerCase()}.`);
+    } 
+    const finalImageUrl = speciesImageUrl ?? null;
+
 
     try {
         await petService.renamePet(userId, name);
@@ -306,7 +322,7 @@ async function handleRename(interaction: ChatInputCommandInteraction) {
         const embed = new EmbedBuilder()
             .setTitle('📝 Pet Renamed!')
             .setDescription(`You've renamed your **${species.name}** to **${name}**!`)
-            .setThumbnail(speciesImageUrl)
+            .setThumbnail(finalImageUrl)
             .setColor(0x00FF00)
             .addFields(
                 { name: 'Species', value: species.name, inline: true },

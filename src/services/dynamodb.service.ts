@@ -1,6 +1,5 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, PutCommand, BatchGetCommand, GetCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
-import { SSMClient, GetParameterCommand } from "@aws-sdk/client-ssm";
 import * as dotenv from "dotenv";
 
 dotenv.config();
@@ -16,7 +15,6 @@ const RESOLVED_REGION = REGION;
 // Initialize AWS clients
 const dynamoClient = new DynamoDBClient({ region: RESOLVED_REGION });
 const docClient = DynamoDBDocumentClient.from(dynamoClient);
-const ssmClient = new SSMClient({ region: RESOLVED_REGION });
 
 /**
  * Generic table name resolver that checks environment variables first,
@@ -36,22 +34,6 @@ export async function resolveTableName(
     if (envValue) {
         cache.value = envValue;
         return cache.value;
-    }
-
-    // Fall back to SSM Parameter Store (for EC2 runtime)
-    try {
-        const command = new GetParameterCommand({
-            Name: ssmParameterName,
-        });
-        const response = await ssmClient.send(command);
-        
-        if (response.Parameter?.Value) {
-            cache.value = response.Parameter.Value;
-            console.log(`Resolved table name from SSM: ${cache.value}`);
-            return cache.value;
-        }
-    } catch (error) {
-        console.error(`Failed to fetch table name from SSM (${ssmParameterName}):`, error);
     }
 
     throw new Error(

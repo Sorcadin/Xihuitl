@@ -5,21 +5,21 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
     OMELETTE_PLAIN: {
         id: 'OMELETTE_PLAIN',
         name: 'Plain Omelette',
-        description: '',
+        description: 'Simple and classic',
         traits: ['edible'],
         hungerRestoration: 20
     },
     OMELETTE_MUSHROOM: {
         id: 'OMELETTE_MUSHROOM',
         name: 'Mushroom Omelette',
-        description: '',
+        description: 'Earthy delight',
         traits: ['edible'],
         hungerRestoration: 20
     },
     OMELETTE_PEPPER: {
         id: 'OMELETTE_PEPPER',
         name: 'Pepper Omelette',
-        description: '',
+        description: 'Vibrant and zesty',
         traits: ['edible'],
         hungerRestoration: 20
     }

@@ -359,7 +359,7 @@ async function handleRename(interaction: ChatInputCommandInteraction) {
 }
 
 async function handleBag(interaction: ChatInputCommandInteraction) {
-    await interaction.deferReply();
+    await interaction.deferReply({ ephemeral: true });
 
     const userId = interaction.user.id;
     const action = interaction.options.getString('action') || 'view';
@@ -373,7 +373,7 @@ async function handleBag(interaction: ChatInputCommandInteraction) {
         const storage = await inventoryService.getStorage(userId, page);
 
         const embed = new EmbedBuilder()
-            .setTitle('🎒 Your Inventory')
+            .setTitle('📦 Inventory (${inventoryCount}/${MAX_INVENTORY_CAPACITY})')
             .setColor(0x0099FF);
 
         // Inventory section
@@ -387,7 +387,7 @@ async function handleBag(interaction: ChatInputCommandInteraction) {
                 return `• ${itemName} x${item.quantity}`;
             }).join('\n');
             embed.addFields({ 
-                name: `📦 Inventory (${inventoryCount}/${MAX_INVENTORY_CAPACITY})`, 
+                name: ``, 
                 value: inventoryList || 'Empty', 
                 inline: false 
             });
@@ -413,52 +413,11 @@ async function handleBag(interaction: ChatInputCommandInteraction) {
         } catch (error: any) {
             await interaction.editReply(`❌ ${error.message || 'Failed to store item.'}`);
         }
-    } else if (action === 'use') {
-        if (!itemId) {
-            await interaction.editReply('❌ Please specify an item to use.');
-            return;
-        }
-
-        // "use" means feed if it's an edible item
-        const itemDef = getItemById(itemId);
-        if (!itemDef) {
-            await interaction.editReply('❌ Invalid item.');
-            return;
-        }
-
-        // Check if item is edible
-        if (!hasTrait(itemDef, 'edible')) {
-            await interaction.editReply('❌ This item cannot be used to feed pets!');
-            return;
-        }
-
-        const hasItem = await inventoryService.hasItem(userId, itemId, 1, 'inventory');
-        if (!hasItem) {
-            await interaction.editReply('❌ You don\'t have this item in your inventory!');
-            return;
-        }
-
-        const pet = await petService.getPet(userId);
-        if (!pet) {
-            await interaction.editReply('❌ You don\'t have a pet! Use `/pet adopt` to adopt one.');
-            return;
-        }
-
-        try {
-            const result = await petService.feedPet(userId, itemDef.hungerRestoration!);
-            await inventoryService.removeItem(userId, itemId, 1, 'inventory');
-
-            const hungerEmoji = HUNGER_STATE_EMOJIS[result.newState] || '⚪';
-            await interaction.editReply(`✅ Used **${itemDef.name}**!\nYour pet's hunger is now ${hungerEmoji} ${result.newState.charAt(0).toUpperCase() + result.newState.slice(1)}.`);
-        } catch (error) {
-            console.error('Error using item:', error);
-            await interaction.editReply('❌ An error occurred while using the item.');
-        }
     }
 }
 
 async function handleStorage(interaction: ChatInputCommandInteraction) {
-    await interaction.deferReply();
+    await interaction.deferReply({ ephemeral: true });
 
     const userId = interaction.user.id;
     const action = interaction.options.getString('action') || 'view';
@@ -472,12 +431,12 @@ async function handleStorage(interaction: ChatInputCommandInteraction) {
         const storage = await inventoryService.getStorage(userId, page);
 
         const embed = new EmbedBuilder()
-            .setTitle('🎒 Your Inventory')
+            .setTitle('🗄️ Storage')
             .setColor(0x0099FF);
 
         // Storage section
         if (storage.items.length === 0 && page === 1) {
-            embed.addFields({ name: '🗄️ Storage', value: 'Empty', inline: false });
+            embed.addFields({ name: '', value: 'Empty', inline: false });
         } else if (storage.items.length > 0) {
             const storageList = storage.items.map(item => {
                 const baseItemId = inventoryService.extractItemId(item.item_id);

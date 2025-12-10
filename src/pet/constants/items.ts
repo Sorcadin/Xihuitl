@@ -12,7 +12,7 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
     OMELETTE_MUSHROOM: {
         id: 'OMELETTE_MUSHROOM',
         name: 'Mushroom Omelette',
-        description: 'Earthy delight',
+        description: 'Savory and subtle',
         traits: ['edible'],
         hungerRestoration: 20
     },

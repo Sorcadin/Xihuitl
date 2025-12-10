@@ -1,5 +1,5 @@
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
-import { DynamoDBDocumentClient, PutCommand, BatchGetCommand, GetCommand, QueryCommand } from "@aws-sdk/lib-dynamodb";
+import { DynamoDBDocumentClient, PutCommand, BatchGetCommand, GetCommand, QueryCommand, UpdateCommand } from "@aws-sdk/lib-dynamodb";
 import * as dotenv from "dotenv";
 
 dotenv.config();
@@ -139,6 +139,32 @@ export class DynamoDBService {
         } catch (e) {
             console.error(`DynamoDB Query Error (${tableName}):`, e);
             return { items: [] };
+        }
+    }
+
+    /**
+     * Update specific attributes of an existing item in a DynamoDB table.
+     */
+    async updateItem(
+        tableName: string, 
+        key: Record<string, string>, 
+        updateExpression: string,
+        expressionAttributeValues: Record<string, any>,
+        expressionAttributeNames?: Record<string, string>
+    ): Promise<void> {
+        try {
+            const command = new UpdateCommand({
+                TableName: tableName,
+                Key: key, // Primary key of the item to update
+                UpdateExpression: updateExpression, // e.g., "SET last_claimed_at = :t"
+                ExpressionAttributeValues: expressionAttributeValues, // e.g., { ":t": timestamp }
+                ExpressionAttributeNames: expressionAttributeNames, // Optional: if attribute names are reserved words
+                ReturnValues: "NONE" // We don't need to return the updated item
+            });
+            await docClient.send(command);
+        } catch (e) {
+            console.error(`DynamoDB Update Error (${tableName}):`, e);
+            throw e;
         }
     }
 }

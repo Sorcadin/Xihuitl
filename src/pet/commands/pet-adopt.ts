@@ -174,17 +174,6 @@ async function buildSpeciesPage(allSpecies: any[], pageIndex: number, userId: st
     const speciesForPage = allSpecies.slice(startIndex, startIndex + SPECIES_PER_PAGE);
     const maxPages = Math.ceil(allSpecies.length / SPECIES_PER_PAGE);
 
-    // Determine the main image (use the first species on the current page)
-    // let descriptionWithImageLinks = '';
-    // for (const species of speciesForPage) {
-    //     // Generate a pre-signed URL for each individual species image
-    //     const imageUrl = await createPresignedDownloadUrl(`${species.id.toLowerCase()}`);
-        
-    //     // TODO: Figure out how to show multiple images.
-    //     descriptionWithImageLinks += 
-    //         `\n**${species.name}** [View Image](${imageUrl ?? 'https://example.com/default-image.png'})`;
-    // }
-
     const individualImageUrls = await Promise.all(
         speciesForPage.map(s => 
             createPresignedDownloadUrl(`${s.id.toLowerCase()}`)

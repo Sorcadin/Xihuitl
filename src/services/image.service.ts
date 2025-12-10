@@ -39,8 +39,7 @@ export async function stitchImagesInMemory(imageUrls: string[]): Promise<Buffer>
         // --- RESIZE OPERATION ---
         const resizedBuffer = await sharp(buffer)
             .resize(TARGET_SIZE, TARGET_SIZE, {
-                // Use 'cover' to ensure the image fills the 450x450 area, 
-                // cropping if necessary to maintain aspect ratio.
+                // Use 'cover' to ensure the image fills the 450x450 area, cropping if necessary to maintain aspect ratio.
                 fit: sharp.fit.cover,
             })
             .toBuffer();

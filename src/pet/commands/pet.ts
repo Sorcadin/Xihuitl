@@ -8,6 +8,7 @@ import { Command } from '../../types';
 import { MAX_INVENTORY_CAPACITY } from '../types';
 import { petService } from '../services/pet.service';
 import { inventoryService } from '../services/inventory.service';
+import { dailyService, COOLDOWN_DURATION_MS } from '../services/daily.service';
 import { createPresignedDownloadUrl } from "../../services/s3.service";
 import { getAllSpecies, getSpeciesById } from '../constants/pet-species';
 import { getItemById, getRandomOmelette, hasTrait } from '../constants/items';
@@ -478,12 +479,50 @@ async function handleDaily(interaction: ChatInputCommandInteraction) {
     await interaction.deferReply();
 
     const userId = interaction.user.id;
+    // Check if user already has a pet
+    const pet = await petService.getPet(userId);
+    if (!pet) {
+        await interaction.editReply('❌ You don\'t have a pet! Use `/pet adopt` to adopt one.');
+        return;
+    }
 
-    // Check if user has claimed today (simple check - in production, store last_claimed_at)
-    // For now, we'll just grant the reward
+    const currentTime = Date.now(); // Current time in milliseconds
+    const lastClaimedAt = await dailyService.getLastClaimTime(userId);
+
+    // Check if the cooldown period has passed
+    if (lastClaimedAt) {
+        const timeElapsed = currentTime - lastClaimedAt.getTime(); 
+        
+        if (timeElapsed < COOLDOWN_DURATION_MS) {
+            // The user is still on cooldown
+            const timeRemainingMs = COOLDOWN_DURATION_MS - timeElapsed;
+            
+            // Convert remaining milliseconds to a human-readable format (e.g., hours, minutes, seconds)
+            const hours = Math.floor(timeRemainingMs / (1000 * 60 * 60));
+            const minutes = Math.floor((timeRemainingMs % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((timeRemainingMs % (1000 * 60)) / 1000);
+
+            // Construct the time remaining string
+            let timeString = '';
+            if (hours > 0) timeString += `${hours}h `;
+            if (minutes > 0) timeString += `${minutes}m `;
+            timeString += `${seconds}s`; // Always show seconds for precision
+
+            const errorEmbed = new EmbedBuilder()
+                .setTitle('⏳ Still on Cooldown')
+                .setDescription(`You have already claimed your daily reward. You can claim again in **${timeString.trim()}**!`)
+                .setColor(0xFFA500); // Orange/Warning color
+
+            await interaction.editReply({ embeds: [errorEmbed] });
+            return;
+        }
+    }
+
+    // Grant the reward
     try {
         const omelette = getRandomOmelette();
         await inventoryService.addItem(userId, omelette.id, 1, 'inventory');
+        await dailyService.setLastClaimTime(userId, new Date(currentTime));
 
         const embed = new EmbedBuilder()
             .setTitle('🎁 Daily Reward Claimed!')
@@ -491,7 +530,7 @@ async function handleDaily(interaction: ChatInputCommandInteraction) {
             .setColor(0xFFD700)
             .addFields(
                 { name: 'Item', value: omelette.name, inline: true },
-                { name: 'Description', value: `+${omelette.description}`, inline: true }
+                { name: 'Description', value: `${omelette.description}`, inline: true }
             );
 
         await interaction.editReply({ embeds: [embed] });

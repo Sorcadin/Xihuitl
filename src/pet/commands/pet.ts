@@ -373,12 +373,12 @@ async function handleBag(interaction: ChatInputCommandInteraction) {
         const storage = await inventoryService.getStorage(userId, page);
 
         const embed = new EmbedBuilder()
-            .setTitle('📦 Inventory (${inventoryCount}/${MAX_INVENTORY_CAPACITY})')
+            .setTitle(`📦 Inventory (${inventoryCount}/${MAX_INVENTORY_CAPACITY})`)
             .setColor(0x0099FF);
 
         // Inventory section
         if (inventory.length === 0) {
-            embed.addFields({ name: '📦 Inventory', value: 'Empty', inline: false });
+            embed.addFields({ name: '', value: 'Empty', inline: false });
         } else {
             const inventoryList = inventory.map(item => {
                 const baseItemId = inventoryService.extractItemId(item.item_id);
@@ -426,8 +426,6 @@ async function handleStorage(interaction: ChatInputCommandInteraction) {
     const page = interaction.options.getInteger('page') || 1;
 
     if (action === 'view') {
-        const inventory = await inventoryService.getInventory(userId);
-        const inventoryCount = await inventoryService.getItemCount(userId, 'inventory');
         const storage = await inventoryService.getStorage(userId, page);
 
         const embed = new EmbedBuilder()
@@ -446,7 +444,7 @@ async function handleStorage(interaction: ChatInputCommandInteraction) {
             }).join('\n');
             const storageFooter = storage.hasMore ? `\n*Page ${page} of ${storage.totalPages}*` : '';
             embed.addFields({ 
-                name: '🗄️ Storage', 
+                name: '', 
                 value: storageList + storageFooter, 
                 inline: false 
             });

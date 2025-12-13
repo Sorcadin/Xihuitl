@@ -24,7 +24,7 @@ export class XiuhStack extends cdk.Stack {
     // ========================================
     // DynamoDB Table for Timezones
     // ========================================
-    const timezoneTable = new dynamodb.Table(this, 'UserTimezonesTable', {
+    const timezoneTable = new dynamodb.Table(this, 'TimezonesTable', {
       tableName: 'xiuh-time',
       partitionKey: {
         name: 'user_id',

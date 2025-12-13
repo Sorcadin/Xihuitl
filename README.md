@@ -160,7 +160,3 @@ aws cloudformation describe-stacks --stack-name XiuhStack
 - **Infrastructure**: AWS CDK
 - **APIs**: Google Geocoding & Timezone APIs (optional)
 - **Image Processing**: Sharp (for compositing pet images)
-
-## License
-
-MIT

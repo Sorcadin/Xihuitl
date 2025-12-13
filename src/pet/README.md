@@ -86,22 +86,6 @@ pet/
 - Hunger capped at 100
 - Updates `lastFedAt` timestamp to reflect new hunger state
 
-## Database
-
-**Table**: `xiuh-pets` (single-table design)
-
-**Structure**:
-- PK: `User#{userId}`
-- SK: `Profile` | `Pet#{petId}` | `Inventory#bag` | `Inventory#storage`
-
-**Example Items**:
-```
-Profile:        { PK: "User#123", SK: "Profile", activePetId: "uuid" }
-Pet:            { PK: "User#123", SK: "Pet#uuid", name: "Fluffy", species: "VIGILUP", hunger: 80 }
-Bag Inventory:  { PK: "User#123", SK: "Inventory#bag", items: { "apple": 5 } }
-Storage:        { PK: "User#123", SK: "Inventory#storage", items: { "bread": 10 } }
-```
-
 ## Technical Notes
 
 - In-memory caching for pet data and S3 presigned URLs

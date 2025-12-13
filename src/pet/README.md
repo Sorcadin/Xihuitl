@@ -1,92 +1,110 @@
 # Pet Feature
 
-Virtual pet simulator feature for Xiuh.
+Virtual pet adoption and care system for the Xihuitl Discord bot.
 
 ## Overview
 
-The pet feature allows users to adopt and care for virtual pets. Users can:
-- Adopt pets of different species
-- Feed pets with various food items
-- Manage inventory and storage
-- Claim daily rewards
+The pet feature allows users to adopt and care for virtual pets with:
+- **Interactive adoption** - Browse species with navigation buttons
+- **Hunger system** - Pets get hungry over time (1 point/hour decay)
+- **Feeding mechanics** - Different foods restore different amounts of hunger
+- **Inventory management** - Bag (50 item capacity) and unlimited storage
+- **Daily rewards** - Claim food items every 20 hours
+- **6 unique species** - Each with distinct types and appearance
 
 ## Structure
 
 ```
 pet/
 ├── commands/
-│   └── pet.ts          # Discord slash command handlers
+│   ├── commands.ts       # Main /pet command definition and router
+│   ├── adopt.ts          # Interactive species selection & adoption
+│   ├── info.ts           # Pet status display
+│   ├── feed.ts           # Feeding with autocomplete
+│   ├── rename.ts         # Pet renaming
+│   ├── bag.ts            # Inventory management (50 capacity)
+│   ├── storage.ts        # Unlimited storage with pagination
+│   └── daily.ts          # Daily reward claiming
 ├── services/
-│   ├── pet.service.ts      # Pet data management (adoption, feeding, hunger)
-│   └── inventory.service.ts # Inventory and storage management
+│   ├── pet.service.ts        # Pet CRUD, hunger calculation, feeding
+│   ├── inventory.service.ts  # Bag/storage management with transactions
+│   └── daily.service.ts      # Daily reward cooldown tracking
 ├── constants/
-│   ├── pet-species.ts      # Available pet species definitions
-│   └── items.ts            # Item definitions (food items, hunger restoration)
-├── types.ts            # Pet-specific TypeScript types
-└── README.md           # This file
+│   ├── pet-species.ts        # 6 species definitions with types
+│   └── items.ts              # Food items with hunger restoration values
+├── types.ts              # TypeScript interfaces
+└── README.md             # This file
 ```
 
-## Components
+## Commands
 
-### Commands (`commands/pet.ts`)
+### `/pet adopt`
+- Interactive species selection with navigation buttons
+- Modal for naming pet
+- One pet per user limit (enforced via DynamoDB transaction)
+- **Handler**: `adopt.ts`
 
-Discord slash command with subcommands:
-- `/pet adopt` - Adopt a new pet (species selection + naming)
-- `/pet info` - View pet information (hunger, species, stats)
-- `/pet bag` - Manage inventory and storage (view, store, use items)
-- `/pet daily` - Claim daily reward
-- `/pet rename` - Rename pet
+### `/pet info`
+- View pet status (hunger, species, age)
+- Hunger displayed with emoji indicators (🟢 → 🔴)
+- **Handler**: `info.ts`
 
-### Services
+### `/pet feed <item>`
+- Feed pet with items from bag (autocomplete)
+- Restores hunger based on item value
+- **Handler**: `feed.ts`
 
-#### `pet.service.ts`
-- Manages pet data in DynamoDB
-- Calculates hunger on-demand based on decay rate
-- Handles pet adoption and feeding
+### `/pet rename <new_name>`
+- Change pet's name (max 32 characters)
+- **Handler**: `rename.ts`
 
-#### `inventory.service.ts`
-- Manages user inventory (limited capacity) and storage (unlimited, paginated)
-- Handles item addition, removal, and movement between inventory/storage
-- Enforces inventory capacity limits
+### `/pet bag [page]`
+- View/manage bag inventory (50 item capacity)
+- Move items to storage
+- **Handler**: `bag.ts`
 
-### Constants
+### `/pet storage [page]`
+- View/manage unlimited storage (paginated)
+- Move items back to bag
+- **Handler**: `storage.ts`
 
-#### `pet-species.ts`
-- Defines available pet species
-- Each species has an ID, name, and image URL
-
-#### `items.ts`
-- Defines food items
-- Each item has various values.
-
-### Types (`types.ts`)
-
-- `Pet` - Pet data structure
-- `PetSpecies` - Species definition
-- `InventoryItem` - Item in inventory/storage
-- `ItemDefinition` - Item metadata
-- `HungerState` - Tiered hunger states (full, satisfied, fine, hungry, starving)
-- Constants: `MAX_INVENTORY_CAPACITY`, `STORAGE_PAGE_SIZE`
+### `/pet daily`
+- Claim daily food rewards (20-hour cooldown)
+- **Handler**: `daily.ts`
 
 ## Hunger System
 
-- Hunger is tracked as a numeric value (0-100) but displayed as tiered states
-- Hunger decays at 1 point per hour
-- Calculated on-demand based on `last_fed_at` timestamp
+- Hunger tracked as numeric value (0-100) with emoji states
+- Decays at 1 point per hour
+- Calculated on-demand based on `lastFedAt` timestamp
+- States: 🟢 Full (80-100), 🟡 Satisfied (60-79), 🟠 Fine (40-59), 🔴 Hungry (20-39), 💀 Starving (0-19)
 
 ## Feeding System
 
-- Different food items restore different amounts of hunger
-- Items are consumed from inventory when feeding
-- Hunger is capped at 100
+- Items consumed from bag restore hunger
+- Different items restore different amounts
+- Hunger capped at 100
+- Updates `lastFedAt` timestamp to reflect new hunger state
 
 ## Database
 
-- **Pets Table**: `xiuh-pets` (partition key: `user_id`)
-- **Inventory Table**: `xiuh-inventory` (partition key: `user_id`, sort key: `item_id#location`)
+**Table**: `xiuh-pets` (single-table design)
 
-## Dependencies
+**Structure**:
+- PK: `User#{userId}`
+- SK: `Profile` | `Pet#{petId}` | `Inventory#bag` | `Inventory#storage`
 
-- Shared services: `../../services/dynamodb.service`
-- Shared types: `../../types` (Command interface)
+**Example Items**:
+```
+Profile:        { PK: "User#123", SK: "Profile", activePetId: "uuid" }
+Pet:            { PK: "User#123", SK: "Pet#uuid", name: "Fluffy", species: "VIGILUP", hunger: 80 }
+Bag Inventory:  { PK: "User#123", SK: "Inventory#bag", items: { "apple": 5 } }
+Storage:        { PK: "User#123", SK: "Inventory#storage", items: { "bread": 10 } }
+```
 
+## Technical Notes
+
+- In-memory caching for pet data and S3 presigned URLs
+- DynamoDB atomic operations for item quantities
+- DynamoDB transactions for `moveItem` and `adoptPet`
+- Discord.js autocomplete, buttons, modals, and embeds

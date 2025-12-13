@@ -1,6 +1,8 @@
-# AWS CDK Setup Guide for Xihuitl Discord Bot
+# AWS CDK Infrastructure Setup Guide
 
-This guide walks you through deploying the Xihuitl Discord bot infrastructure using AWS CDK.
+This guide walks you through deploying the Xihuitl Discord bot infrastructure to AWS using CDK.
+
+**Purpose**: Set up production infrastructure (EC2, DynamoDB, S3) to run the bot 24/7 on AWS.
 
 ## Prerequisites
 
@@ -50,7 +52,7 @@ Replace `ACCOUNT-NUMBER` with your AWS account ID (from `aws sts get-caller-iden
 
 ### Step 2: Create Required SSM Parameters
 
-Before deploying infrastructure, you need to create two SSM parameters:
+Before deploying infrastructure, you need to create three SSM parameters:
 
 #### a) EC2 Key Pair Name
 
@@ -94,7 +96,28 @@ aws ssm put-parameter \
 
 **Important**: Replace `YOUR_DISCORD_BOT_TOKEN_HERE` with your actual Discord bot token.
 
-#### c) Verify Parameters
+#### c) Google API Key (Optional)
+
+For `/time set location:CityName` to work, you need a Google API key:
+
+```bash
+aws ssm put-parameter \
+  --name "/xiuh/google-api-key" \
+  --value "YOUR_GOOGLE_API_KEY_HERE" \
+  --type "SecureString" \
+  --description "Google API key for Geocoding and Timezone APIs"
+```
+
+**How to get a Google API key:**
+1. Go to [Google Cloud Console](https://console.cloud.google.com/)
+2. Create a new project or use an existing one
+3. Enable "Geocoding API" and "Time Zone API"
+4. Create credentials → API key
+5. Restrict the API key to only these two APIs for security
+
+**Note**: This is optional. If not provided, the `/time set location` feature won't work, but users can still use `/time get user`.
+
+#### d) Verify Parameters
 
 ```bash
 # Verify parameters were created
@@ -103,6 +126,7 @@ aws ssm get-parameters-by-path --path "/xiuh"
 # Or check individual parameters
 aws ssm get-parameter --name "/xiuh/ec2-keypair-name"
 aws ssm get-parameter --name "/xiuh/discord-token" --with-decryption
+aws ssm get-parameter --name "/xiuh/google-api-key" --with-decryption
 ```
 
 ### Step 3: Install Project Dependencies
@@ -111,22 +135,42 @@ aws ssm get-parameter --name "/xiuh/discord-token" --with-decryption
 npm install
 ```
 
-### Step 4: Deploy the Infrastructure
+### Step 4: Prepare Pet Images
+
+Ensure you have pet species images in the `assets/` folder:
+
+```bash
+# Images should be PNG format named by species ID
+assets/
+  ├── vigilup.png
+  ├── archino.png
+  ├── anobite.png
+  ├── cladily.png
+  ├── hullet.png
+  └── gytop.png
+```
+
+These will be automatically deployed to S3 during infrastructure deployment.
+
+### Step 5: Deploy the Infrastructure
 
 ```bash
 make infra.deploy
 ```
 
 This will:
-- Create a DynamoDB table (`xiuh-users`)
-- Launch an EC2 instance (t3.micro)
+- Create two DynamoDB tables:
+  - `xiuh-time` - User timezone preferences
+  - `xiuh-pets` - Pet system (single-table design with PK/SK)
+- Create an S3 bucket (`xiuh-pet-images`) and upload pet images
+- Launch an EC2 instance (t4g.micro - ARM64 Graviton)
 - Set up IAM roles with appropriate permissions
 - Configure security groups
 - Bootstrap the EC2 instance with Node.js and systemd service
 
 **Note**: The deployment will show you a summary and ask for confirmation. Type `y` to proceed.
 
-### Step 5: Save the Outputs
+### Step 6: Save the Outputs
 
 After deployment completes, CDK will output important information:
 
@@ -134,14 +178,16 @@ After deployment completes, CDK will output important information:
 Outputs:
 XiuhStack.InstancePublicIp = xxx.xxx.xxx.xxx
 XiuhStack.InstancePublicDnsName = ec2-xxx-xxx-xxx-xxx.us-east-2.compute.amazonaws.com
-XiuhStack.DynamoDBTableName = xiuh-users
+XiuhStack.DynamoDBTableName = xiuh-time
+XiuhStack.PetsTableName = xiuh-pets
+XiuhStack.PetImagesBucketName = xiuh-pet-images
 XiuhStack.BotRoleArn = arn:aws:iam::...
 XiuhStack.SecurityGroupId = sg-...
 ```
 
 **Save the InstancePublicIp** - you'll need it for deployment!
 
-### Step 6: Update Your .env File
+### Step 7: Update Your .env File
 
 Create or update your `.env` file with the following:
 
@@ -152,18 +198,22 @@ DISCORD_CLIENT_ID=your_client_id_here
 
 # AWS Configuration
 AWS_REGION=us-east-2
-DYNAMO_TABLE=xiuh-users
+TIMEZONE_TABLE=xiuh-time       # Optional, defaults to xiuh-time
+PETS_TABLE=xiuh-pets           # Optional, defaults to xiuh-pets
+IMAGE_BUCKET=xiuh-pet-images   # Optional, defaults to xiuh-pet-images
 
-# EC2 Configuration (for deployment)
+# Google API (Optional - for time location lookups)
+GOOGLE_API_KEY=your_google_api_key_here  # Optional, only needed for /time set location
+
+# EC2 Configuration (for deployment only)
 EC2_HOST=xxx.xxx.xxx.xxx  # Use the InstancePublicIp from CDK outputs
 EC2_USER=ec2-user
 SSH_KEY=~/.ssh/xiuh-bot-key.pem
 REMOTE_DIR=/home/ec2-user/xiuh-bot
+SSH_DEPLOY_IP=xxx.xxx.xxx.xxx/32  # Your IP for SSH access (for CDK deployment)
 ```
 
-**Note**: `DYNAMO_TABLE` is optional in `.env` as the bot can fetch it from SSM Parameter Store automatically.
-
-### Step 7: Wait for EC2 Bootstrap to Complete
+### Step 8: Wait for EC2 Bootstrap to Complete
 
 The EC2 instance needs a few minutes to complete its initialization:
 
@@ -174,7 +224,7 @@ ssh -i ~/.ssh/xiuh-bot-key.pem ec2-user@$EC2_HOST \
 
 # Should show: "Bootstrap complete at [timestamp]"
 ```
-### Step 8: Deploy the Bot Application
+### Step 9: Deploy the Bot Application
 
 Now you can deploy your bot code to the EC2 instance:
 
@@ -189,90 +239,90 @@ This will:
 4. Install dependencies
 5. Restart the bot service
 
-### Step 9: Register Discord Slash Commands
+### Step 10: Register Discord Slash Commands
 
 ```bash
 make deploy.commands
 ```
 
-## Ongoing Usage
+**🎉 Deployment Complete!** Your bot should now be running on EC2.
 
-### Deploying Code Updates
+Check status:
+```bash
+ssh -i ~/.ssh/xiuh-bot-key.pem ec2-user@$EC2_HOST "sudo systemctl status xiuh-bot"
+```
 
-After making changes to your bot code, deploy with:
+## Post-Deployment
+
+### Monitoring the Bot
+
+```bash
+# SSH into your instance
+ssh -i ~/.ssh/xiuh-bot-key.pem ec2-user@YOUR_EC2_IP
+
+# View live logs
+sudo journalctl -u xiuh-bot -f
+
+# Restart if needed
+sudo systemctl restart xiuh-bot
+```
+
+### Updating Bot Code
+
+After making code changes:
 
 ```bash
 make deploy
 ```
 
-This only updates your application code, not the infrastructure.
+This builds, uploads, and restarts the bot without touching infrastructure.
 
 ### Updating Infrastructure
 
-If you modify the CDK stack (in `infra/lib/xiuh-stack.ts`), deploy infrastructure changes with:
+If you modify `infra/lib/xiuh-stack.ts`:
 
 ```bash
-# Preview changes first
-make infra.diff
-
-# Deploy infrastructure changes
-make infra.deploy
-```
-
-Or using npm scripts:
-
-```bash
-npm run cdk:diff
-npm run cdk:deploy
-```
-
-### Checking Bot Status
-
-SSH into your instance to check the bot:
-
-```bash
-ssh -i ~/.ssh/xiuh-bot-key.pem ec2-user@xxx.xxx.xxx.xxx
-
-# Check bot status
-sudo systemctl status xiuh-bot
-
-# View logs
-sudo journalctl -u xiuh-bot -f
+make infra.diff    # Preview changes
+make infra.deploy  # Apply changes
 ```
 
 ### Destroying Infrastructure
 
-To tear down all infrastructure (WARNING: This will delete your EC2 instance):
+**⚠️ WARNING**: This deletes your EC2 instance and all bot data.
 
 ```bash
-# Using Makefile (includes 5-second safety delay)
 make infra.destroy
-
-# Or using npm scripts
-npm run cdk:destroy
 ```
 
-**Note**: The DynamoDB table has `RETAIN` policy and won't be deleted. You must delete it manually if desired.
+**Note**: DynamoDB tables and S3 bucket have `RETAIN` policy and won't be auto-deleted.
 
-To delete the table:
-
+To manually delete:
 ```bash
-aws dynamodb delete-table --table-name xiuh-users
+# Delete DynamoDB tables
+aws dynamodb delete-table --table-name xiuh-time
+aws dynamodb delete-table --table-name xiuh-pets
+
+# Empty and delete S3 bucket
+aws s3 rm s3://xiuh-pet-images --recursive
+aws s3 rb s3://xiuh-pet-images
 ```
 
 ## Free Tier Considerations
 
 This setup is designed to stay within AWS Free Tier limits:
 
-- **EC2**: t3.micro instance (750 hours/month free for 12 months)
-- **DynamoDB**: On-demand pricing (25 GB storage free forever)
+- **EC2**: t4g.micro instance (750 hours/month free for 12 months)
+- **DynamoDB**: On-demand pricing (25 GB storage free forever, 2.5M reads + 1M writes/month free)
+- **S3**: 5 GB storage free (first 12 months), 20K GET requests free
 - **SSM Parameter Store**: Standard parameters are free
 - **Data Transfer**: First 100 GB/month outbound is free
 
 **Important**: 
 - Running the instance 24/7 = ~720 hours/month (within free tier)
-- After 12 months, t3.micro costs ~$7.50/month
-- DynamoDB on-demand is typically under $1/month for this use case
+- After 12 months, t4g.micro costs ~$6/month (cheaper than t3.micro!)
+- DynamoDB on-demand is typically $0/month for small bots
+- S3 costs ~$0.12/month for 5GB after first year
+- **Total estimated cost after free tier: $6-8/month**
 
 ## Troubleshooting
 
@@ -327,81 +377,158 @@ sudo systemctl status xiuh-bot
 
 # View full logs
 sudo journalctl -u xiuh-bot --no-pager
+
+# Check environment variables
+cat /home/ec2-user/xiuh-bot/.env
+```
+
+### Pet Images Not Loading
+
+Verify S3 bucket and images:
+```bash
+# List images in S3 bucket
+aws s3 ls s3://xiuh-pet-images/
+
+# Verify IAM permissions
+aws iam get-role-policy --role-name xiuh-bot-role --policy-name [policy-name]
+
+# Test presigned URL generation locally
+# (ensure AWS credentials are configured)
+```
+
+### DynamoDB Access Issues
+
+Check table exists and permissions:
+```bash
+# Verify tables exist
+aws dynamodb describe-table --table-name xiuh-time
+aws dynamodb describe-table --table-name xiuh-pets
+
+# Check IAM role has permissions
+aws iam list-role-policies --role-name xiuh-bot-role
 ```
 
 ## Architecture Overview
 
 ```
-┌──────────────────────────────────────┐
-│           AWS us-east-2              │
-│                                      │
-│  ┌────────────────────────────────┐  │
-│  │ EC2 Instance (t3.micro)        │  │
-│  │ - Amazon Linux 2023            │  │
-│  │ - Node.js 18                   │  │
-│  │ - Xihuitl Discord Bot          │  │
-│  │ - systemd service              │  │
-│  └────────┬───────────────────────┘  │
-│           │                          │
-│           │ IAM Role                 │
-│           │                          │
-│  ┌────────▼───────────────────────┐  │
-│  │ DynamoDB Table                 │  │
-│  │ xiuh-users                     │  │
-│  │ - Partition Key: user_id       │  │
-│  │ - On-demand billing            │  │
-│  └────────────────────────────────┘  │
-│                                      │
-│  ┌────────────────────────────────┐  │
-│  │ SSM Parameter Store            │  │
-│  │ - /xiuh/table-name             │  │
-│  │ - /xiuh/discord-token          │  │
-│  │ - /xiuh/ec2-keypair-name       │  │
-│  └────────────────────────────────┘  │
-│                                      │
-└──────────────────────────────────────┘
+┌─────────────────────────────────────────────────────────────────┐
+│                       AWS us-east-2                             │
+│                                                                 │
+│  ┌────────────────────────────────────────────────────────────┐ │
+│  │ EC2 Instance (t4g.micro - ARM64 Graviton)                  │ │
+│  │ - Amazon Linux 2023                                        │ │
+│  │ - Node.js (latest LTS)                                     │ │
+│  │ - Xihuitl Discord Bot                                      │ │
+│  │ - systemd service                                          │ │
+│  └────────┬───────────────────────────────────────────────────┘ │
+│           │                                                      │
+│           │ IAM Role (Read/Write)                               │
+│           │                                                      │
+│  ┌────────▼──────────────┐  ┌──────────────────────────────┐   │
+│  │ DynamoDB Tables       │  │ S3 Bucket                    │   │
+│  │                       │  │ xiuh-pet-images              │   │
+│  │ xiuh-time             │  │ - Pet species images (PNG)   │   │
+│  │ - PK: user_id         │  │ - Private (presigned URLs)   │   │
+│  │ - timezone data       │  │ - Read-only for bot          │   │
+│  │                       │  └──────────────────────────────┘   │
+│  │ xiuh-pets             │                                      │
+│  │ - PK: User#id         │                                      │
+│  │ - SK: Profile/Pet/    │                                      │
+│  │       Inventory       │                                      │
+│  │ - Single-table design │                                      │
+│  │ - On-demand billing   │                                      │
+│  └───────────────────────┘                                      │
+│                                                                 │
+│  ┌──────────────────────────────────────────────────────────┐  │
+│  │ SSM Parameter Store                                      │  │
+│  │ - /xiuh/discord-token      (SecureString, required)      │  │
+│  │ - /xiuh/ec2-keypair-name   (String, required)            │  │
+│  │ - /xiuh/google-api-key     (SecureString, optional)      │  │
+│  └──────────────────────────────────────────────────────────┘  │
+│                                                                 │
+└─────────────────────────────────────────────────────────────────┘
 ```
 
-## Quick Reference
+## DynamoDB Table Structures
 
-### Makefile Commands
+### xiuh-time (Simple Table)
+```
+Partition Key: user_id
+No Sort Key
 
-```bash
-# Infrastructure
-make infra.synth      # Synthesize CloudFormation template
-make infra.deploy     # Deploy infrastructure
-make infra.diff       # Show infrastructure changes
-make infra.destroy    # Destroy infrastructure (with safety delay)
-
-# Bot Application
-make deploy           # Deploy bot code to EC2
-make deploy.commands  # Register Discord slash commands
-make build            # Build TypeScript
-make clean            # Clean build artifacts
+Example items:
+{
+  user_id: "123456789",
+  timezone: "America/New_York",
+  display_location: "New York, NY, USA"
+}
 ```
 
-### Useful AWS Commands
+### xiuh-pets (Single-Table Design)
+```
+Partition Key: PK
+Sort Key: SK
+
+Example items:
+# User Profile
+{
+  PK: "User#123456789",
+  SK: "Profile",
+  activePetId: "uuid-here",
+  lastDailyReward: 1234567890
+}
+
+# Pet Data
+{
+  PK: "User#123456789",
+  SK: "Pet#uuid-here",
+  name: "Fluffy",
+  species: "VIGILUP",
+  hunger: 80,
+  lastFedAt: 1234567890,
+  adoptedAt: 1234567890
+}
+
+# Inventory (Bag or Storage)
+{
+  PK: "User#123456789",
+  SK: "Inventory#bag",
+  items: {
+    "apple": 5,
+    "banana": 3
+  }
+}
+```
+
+**Benefits of Single-Table Design:**
+- Atomic operations across related entities (transactions)
+- Efficient queries with composite keys
+- Cost-effective (one table instead of many)
+
+## Next Steps
+
+1. **Invite your bot to Discord**: Use the Discord Developer Portal to generate an invite URL
+2. **Test commands**: Try `/time set`, `/pet adopt`, etc.
+3. **Monitor logs**: `ssh` into EC2 and run `sudo journalctl -u xiuh-bot -f`
+4. **Check AWS costs**: Visit AWS Billing Dashboard to ensure you're within free tier
+
+## Useful AWS Commands
 
 ```bash
 # Check EC2 instances
 aws ec2 describe-instances --filters "Name=instance-state-name,Values=running" \
-  --query 'Reservations[*].Instances[*].[InstanceId,PublicIpAddress,State.Name]' --output table
+  --query 'Reservations[*].Instances[*].[InstanceId,PublicIpAddress]' --output table
 
 # Check DynamoDB tables
 aws dynamodb list-tables
 
-# Check SSM parameters
-aws ssm get-parameters-by-path --path "/xiuh"
+# View S3 bucket contents
+aws s3 ls s3://xiuh-pet-images/
 
-# View CloudFormation stack
+# Get user data (example)
+aws dynamodb get-item --table-name xiuh-pets \
+  --key '{"PK": {"S": "User#123456789"}, "SK": {"S": "Profile"}}'
+
+# Check CloudFormation stack
 aws cloudformation describe-stacks --stack-name XiuhStack
 ```
-
-## Next Steps
-
-1. Deploy your Discord commands: `make deploy.commands`
-2. Invite the bot to your Discord server
-3. Test the `/time` command
-4. Monitor the bot with `sudo journalctl -u xiuh-bot -f`
-
-For more information on Discord.js, visit: https://discord.js.org/

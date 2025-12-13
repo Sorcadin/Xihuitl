@@ -2,7 +2,7 @@ import { dynamoDBService } from "../../services/dynamodb.service";
 import { UserTimezone } from "../types";
 
 // Table name caches
-const table = process.env.TIMEZONE_TABLE || "xiuh-timezones";
+const table = process.env.TIMEZONE_TABLE || "xiuh-time";
 
 /**
  * Service for managing user timezone data in DynamoDB

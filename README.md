@@ -1,126 +1,166 @@
-# Xihuitl
+# Xihuitl Discord Bot
 
-A Discord bot that helps users manage and display timezones across different locations.
+A Discord bot with timezone management and virtual pet game features.
 
-## Project Structure
+## Features
 
-```
-Xihuitl/
-├── src/                  	# Discord bot application code
-│   ├── commands/        	# Bot slash commands
-│   ├── services/        	# AWS and geo services
-│   └── index.ts         	# Bot entry point
-├── infra/               	# AWS CDK infrastructure code
-│   ├── bin/infra.ts     	# CDK app entry
-│   └── lib/xiuh-stack.ts	# Stack definition
-├── dist/                	# Compiled JavaScript (gitignored)
-├── package.json
-├── tsconfig.json        	# TypeScript config for bot
-├── cdk.json             	# CDK configuration
-├── Makefile             	# Deployment commands
-└── CDK_SETUP.md         	# Detailed infrastructure setup guide
-```
+### 🕐 Time Commands
+Help your Discord community coordinate across timezones:
+- **`/time set location`** - Set your timezone by location name (e.g., "Tokyo", "New York")
+- **`/time get user`** - Check what time it is for any user
+- **`/time get location`** - Check current time in any location
+- **`/time all`** - View everyone's local times grouped by timezone
+- **Auto-mention replies** - Bot automatically responds with time when users are mentioned (2-hour cooldown)
+
+### 🐾 Pet System
+Adopt and care for virtual pets:
+- **`/pet adopt`** - Interactive pet adoption with species browsing
+- **`/pet info`** - View your pet's status, hunger level, and age
+- **`/pet feed`** - Feed your pet to restore hunger (autocomplete search)
+- **`/pet rename`** - Give your pet a new name
+- **`/pet bag`** - Manage your inventory (50 item capacity)
+- **`/pet storage`** - Access unlimited storage space
+- **`/pet daily`** - Claim daily food rewards (20-hour cooldown)
+
+**Pet Features:**
+- 6 unique species with different types (beast, plant, insect, construct)
+- Hunger system that decays over time
+- Item system with food and inventory management
+- Daily reward system with cooldowns
 
 ## Quick Start
 
-### 1. Infrastructure Setup (One-time)
+### For New Deployments
 
-Deploy AWS infrastructure using CDK:
+See **[CDK_SETUP.md](CDK_SETUP.md)** for complete infrastructure deployment guide.
+
+### For Development
 
 ```bash
 # Install dependencies
 npm install
 
-# Deploy infrastructure (EC2, DynamoDB, IAM, etc.)
-npm run cdk:deploy
-```
+# Build TypeScript
+npm run build
 
-See **[CDK_SETUP.md](CDK_SETUP.md)** for detailed setup instructions including:
-- AWS credentials configuration
-- CDK bootstrap
-- SSM parameter setup
-- EC2 key pair creation
+# Run locally (requires AWS credentials)
+npm run dev
 
-### 2. Environment Variables
-
-Create a `.env` in the project root:
-
-```bash
-# Discord Configuration
-DISCORD_TOKEN=your_discord_bot_token_here
-DISCORD_CLIENT_ID=your_client_id_here
-
-# AWS Configuration
-AWS_REGION=your_region
-DYNAMO_TABLE=table_name
-
-# EC2 Deployment Configuration
-EC2_HOST=ec2_host_address  # From CDK outputs
-EC2_USER=ec2_user
-SSH_KEY=~/.ssh/key.pem
-REMOTE_DIR=/home/ec2-user/xiuh-bot
-```
-
-### 3. Deploy Bot Application
-
-```bash
-# Build and deploy bot code to EC2
+# Deploy to production
 make deploy
 ```
 
-### 4. Register Slash Commands
+## Available Commands
+
+### Makefile Commands
 
 ```bash
-# Register Discord slash commands
-make deploy.commands
+# Development
+make build              # Compile TypeScript to JavaScript
+make clean              # Remove compiled files
+
+# Deployment
+make deploy             # Build and deploy bot to EC2
+make deploy.commands    # Register slash commands with Discord
+
+# Infrastructure (AWS CDK)
+make infra.synth        # Generate CloudFormation template
+make infra.deploy       # Deploy infrastructure to AWS
+make infra.diff         # Preview infrastructure changes
+make infra.destroy      # Destroy infrastructure (with safety delay)
 ```
 
-## Development
+### NPM Scripts
 
 ```bash
-# Build TypeScript
-make build
+npm run build           # Compile TypeScript
+npm run dev             # Run bot locally with ts-node
+npm start               # Run compiled bot from dist/
 
-# Run bot locally (requires AWS credentials)
-npm run dev
-
-# Start compiled bot (on your local machine)
-npm start
+# CDK commands
+npm run cdk:synth       # Synthesize CloudFormation
+npm run cdk:deploy      # Deploy infrastructure
+npm run cdk:diff        # Show changes
+npm run cdk:destroy     # Destroy stack
 ```
 
-## Infrastructure Management
+## Project Structure
 
-```bash
-# View infrastructure changes
-make infra.diff
-
-# Update infrastructure
-make infra.deploy
-
-# Destroy infrastructure (WARNING: deletes EC2)
-make infra.destroy
+```
+Xihuitl/
+├── src/
+│   ├── pet/
+│   │   ├── commands/         # Pet slash command handlers
+│   │   ├── services/         # Pet, inventory, daily reward services
+│   │   └── constants/        # Pet species and item definitions
+│   ├── time/
+│   │   ├── commands/         # Time slash command handlers
+│   │   └── services/         # Timezone and geocoding services
+│   ├── services/             # Shared AWS services (DynamoDB, S3)
+│   └── index.ts              # Bot entry point
+├── infra/
+│   └── lib/xiuh-stack.ts     # AWS CDK infrastructure definition
+├── assets/                   # Pet species images (deployed to S3)
+├── dist/                     # Compiled JavaScript (gitignored)
+└── CDK_SETUP.md              # Infrastructure deployment guide
 ```
 
-## Monitoring
+## Infrastructure Overview
 
-SSH into your EC2 instance to monitor the bot:
+The bot runs on AWS with a cost-optimized setup:
+
+- **EC2 t4g.micro** (ARM64 Graviton) - Runs the bot 24/7
+- **DynamoDB** (on-demand) - Two tables:
+  - `xiuh-time` - User timezone preferences (simple key-value)
+  - `xiuh-pets` - Pet system (single-table design with PK/SK)
+- **S3 Bucket** - Pet species images (private, presigned URLs)
+- **IAM Role** - Scoped permissions for DynamoDB read/write and S3 read
+- **Security Group** - SSH access for deployment
+
+**Cost**: Free for first 12 months, then ~$6-8/month
+
+See [CDK_SETUP.md](CDK_SETUP.md) for detailed infrastructure setup and deployment.
+
+## Monitoring & Debugging
+
+### Check Bot Status
 
 ```bash
+# SSH into EC2 instance
 ssh -i ~/.ssh/xiuh-bot-key.pem ec2-user@YOUR_EC2_IP
 
-# Check bot status
+# Check service status
 sudo systemctl status xiuh-bot
 
-# View logs
+# View live logs
 sudo journalctl -u xiuh-bot -f
+
+# Restart bot
+sudo systemctl restart xiuh-bot
 ```
 
-## Architecture
+### Check AWS Resources
 
-- **EC2 Instance** (t3.micro): Runs the Discord bot 24/7
-- **DynamoDB**: Stores user timezone preferences
-- **IAM Role**: Grants EC2 permissions for DynamoDB and SSM
-- **Security Group**: SSH access for deployment
-- **SSM Parameter Store**: Manages configuration secrets
+```bash
+# List DynamoDB tables
+aws dynamodb list-tables
 
-See `infra/` directory for complete infrastructure code.
+# View S3 bucket contents
+aws s3 ls s3://xiuh-pet-images/
+
+# Check CloudFormation stack
+aws cloudformation describe-stacks --stack-name XiuhStack
+```
+
+## Technology Stack
+
+- **Runtime**: Node.js with TypeScript
+- **Framework**: Discord.js v14 (optimized caching)
+- **Cloud**: AWS (EC2, DynamoDB, S3)
+- **Infrastructure**: AWS CDK
+- **APIs**: Google Geocoding & Timezone APIs (optional)
+- **Image Processing**: Sharp (for compositing pet images)
+
+## License
+
+MIT

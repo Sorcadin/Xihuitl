@@ -52,10 +52,9 @@ export async function handleAdopt(interaction: ChatInputCommandInteraction) {
 
             if (!buttonInteraction) break;
 
-            // Acknowledge the interaction
-            await buttonInteraction.deferUpdate();
-
             if (buttonInteraction.customId === 'nav_left') {
+                // Acknowledge the interaction for navigation
+                await buttonInteraction.deferUpdate();
                 // Move left (wrap around)
                 currentIndex = (currentIndex - 1 + speciesList.length) % speciesList.length;
                 const { embed, components } = await buildSpeciesDisplay(speciesList, currentIndex);
@@ -64,6 +63,8 @@ export async function handleAdopt(interaction: ChatInputCommandInteraction) {
                     components: components,
                 });
             } else if (buttonInteraction.customId === 'nav_right') {
+                // Acknowledge the interaction for navigation
+                await buttonInteraction.deferUpdate();
                 // Move right (wrap around)
                 currentIndex = (currentIndex + 1) % speciesList.length;
                 const { embed, components } = await buildSpeciesDisplay(speciesList, currentIndex);
@@ -72,8 +73,8 @@ export async function handleAdopt(interaction: ChatInputCommandInteraction) {
                     components: components,
                 });
             } else if (buttonInteraction.customId === 'adopt_current') {
-                // User chose to adopt this species
-                await handleSpeciesSelection(buttonInteraction, speciesList[currentIndex].id);
+                // Don't defer - modal must be the first response
+                await handleSpeciesSelection(buttonInteraction, speciesList[currentIndex].id, interaction);
                 return;
             }
         }
@@ -118,7 +119,11 @@ async function buildSpeciesDisplay(speciesList: any[], index: number) {
     return { embed, components: [row] };
 }
 
-async function handleSpeciesSelection(interaction: ButtonInteraction, speciesId: string) {
+async function handleSpeciesSelection(
+    buttonInteraction: ButtonInteraction, 
+    speciesId: string,
+    originalInteraction: ChatInputCommandInteraction
+) {
     const species = getSpeciesDataById(speciesId);
 
     // Create the Name Input Modal
@@ -139,33 +144,44 @@ async function handleSpeciesSelection(interaction: ButtonInteraction, speciesId:
         components: [actionRow],
     });
 
-    await interaction.showModal(modal);
+    // Show modal as the response to the button click
+    await buttonInteraction.showModal(modal);
 
     // Wait for modal submission
     const filter = (i: ModalSubmitInteraction) => 
-        i.customId === `adopt_name_modal_${speciesId}` && i.user.id === interaction.user.id;
+        i.customId === `adopt_name_modal_${speciesId}` && i.user.id === buttonInteraction.user.id;
 
     try {
-        const modalSubmission = await interaction.awaitModalSubmit({
+        const modalSubmission = await buttonInteraction.awaitModalSubmit({
             filter,
             time: 120_000,
         });
 
-        await handleNameSubmission(modalSubmission, speciesId);
+        await handleNameSubmission(modalSubmission, speciesId, originalInteraction);
     } catch (e) {
         console.error('Modal submission timed out:', e);
+        // Update original message to show timeout
+        await originalInteraction.editReply({
+            content: '⏰ Pet naming timed out. Please run the command again.',
+            embeds: [],
+            components: [],
+        });
     }
 }
 
-async function handleNameSubmission(interaction: ModalSubmitInteraction, speciesId: string) {
-    await interaction.deferReply({ ephemeral: true });
+async function handleNameSubmission(
+    modalInteraction: ModalSubmitInteraction, 
+    speciesId: string,
+    originalInteraction: ChatInputCommandInteraction
+) {
+    await modalInteraction.deferReply({ ephemeral: true });
 
-    const userId = interaction.user.id;
-    const name = interaction.fields.getTextInputValue('pet_name_input');
+    const userId = modalInteraction.user.id;
+    const name = modalInteraction.fields.getTextInputValue('pet_name_input');
     const species = getSpeciesDataById(speciesId);
 
     if (!species) {
-        await interaction.editReply('❌ Invalid species selected.');
+        await modalInteraction.editReply('❌ Invalid species selected.');
         return;
     }
 
@@ -184,16 +200,31 @@ async function handleNameSubmission(interaction: ModalSubmitInteraction, species
                 { name: 'Name', value: name, inline: true },
             );
 
-        await interaction.editReply({ embeds: [embed] });
+        // Clear the original species selection message
+        await originalInteraction.editReply({
+            content: '✅ Adoption complete! Check the message below.',
+            embeds: [],
+            components: [],
+        });
+
+        // Send success message as ephemeral reply
+        await modalInteraction.editReply({ embeds: [embed] });
     } catch (error: any) {
         console.error('Error adopting pet:', error);
 
         // Check if error is due to user already having a pet
         if (error.name === 'TransactionCanceledException' || 
             error.message?.includes('ConditionalCheckFailed')) {
-            await interaction.editReply('❌ You already have a pet! Use `/pet info` to see your pet.');
+            await modalInteraction.editReply('❌ You already have a pet! Use `/pet info` to see your pet.');
         } else {
-            await interaction.editReply('❌ An error occurred while adopting your pet.');
+            await modalInteraction.editReply('❌ An error occurred while adopting your pet.');
         }
+
+        // Also clear the original message
+        await originalInteraction.editReply({
+            content: '❌ Adoption failed.',
+            embeds: [],
+            components: [],
+        });
     }
 }

@@ -15,7 +15,7 @@ ifndef SSH_KEY
 $(error SSH_KEY is not set. Add it to your .env (e.g. SSH_KEY=./my-key.pem))
 endif
 
-.PHONY: all clean build package deploy deploy.commands infra.synth infra.deploy infra.diff infra.destroy
+.PHONY: all clean build package deploy deploy.commands dev dev.ec2.stop dev.ec2.start infra.synth infra.deploy infra.diff infra.destroy
 
 all: deploy
 

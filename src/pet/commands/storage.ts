@@ -21,10 +21,10 @@ export async function handleStorage(interaction: ChatInputCommandInteraction) {
             .setTitle('🗄️ Storage')
             .setColor(0x0099FF);
 
-        if (storage.items.length === 0 && page === 1) {
+        if (storage.itemMap.length === 0 && page === 1) {
             embed.addFields({ name: '', value: 'Empty', inline: false });
-        } else if (storage.items.length > 0) {
-            const storageList = storage.items.map(item => {
+        } else if (storage.itemMap.length > 0) {
+            const storageList = storage.itemMap.map(item => {
                 return `• ${item.name} x${item.quantity}`;
             }).join('\n');
             const storageFooter = storage.hasMore ? `\n*Page ${page} of ${storage.totalPages}*` : '';

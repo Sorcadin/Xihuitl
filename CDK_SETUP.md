@@ -493,7 +493,7 @@ Example items:
 {
   PK: "User#123456789",
   SK: "Inventory#bag",
-  items: {
+  itemMap: {
     "apple": 5,
     "banana": 3
   }

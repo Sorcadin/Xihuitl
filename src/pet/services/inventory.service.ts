@@ -1,5 +1,5 @@
 import { dynamoDBService } from "../../services/dynamodb.service";
-import { ItemEntity, Item, MAX_INVENTORY_CAPACITY, STORAGE_PAGE_SIZE } from "../types";
+import { Item, MAX_INVENTORY_CAPACITY, STORAGE_PAGE_SIZE } from "../types";
 import { ITEM_CATALOG } from "../constants/items";
 
 const table = process.env.PETS_TABLE || "xiuh-pets";
@@ -10,7 +10,7 @@ const table = process.env.PETS_TABLE || "xiuh-pets";
  * {
  *   PK: "User#${userId}",
  *   SK: "Inventory#bag" or "Inventory#storage",
- *   items: {
+ *   itemMap: {
  *     "apple": 5,
  *     "banana": 3
  *   }
@@ -19,17 +19,37 @@ const table = process.env.PETS_TABLE || "xiuh-pets";
  */
 
 export class InventoryService {
+    /**
+     * Ensures itemMap exists for the given inventory location.
+     * If it doesn't exist, initializes it as an empty object.
+     */
+    private async ensureInventoryExists(userId: string, location: 'bag' | 'storage'): Promise<void> {
+        const PK = `User#${userId}`;
+        const SK = `Inventory#${location}`;
+
+        const result = await dynamoDBService.getEntity<{ itemMap?: Record<string, number> }>(table, {PK: PK, SK: SK});
+        
+        if (!result?.itemMap) {
+            await dynamoDBService.updateEntity(
+                table,
+                { PK: PK, SK: SK },
+                `SET itemMap = :emptyMap`,
+                { ":emptyMap": {} }
+            );
+        }
+    }
+
     public async getBag(userId: string): Promise<Item[]> {
         const PK = `User#${userId}`;
         const SK = "Inventory#bag";
 
-        const result = await dynamoDBService.getEntity<{ items?: Record<string, number> }>(table, {PK: PK, SK: SK});
-        const rawBag = result?.items || {};
+        const result = await dynamoDBService.getEntity<{ itemMap?: Record<string, number> }>(table, {PK: PK, SK: SK});
+        const rawBag = result?.itemMap || {};
 
         const hydratedBag: Item[] = Object.entries(rawBag).map(([itemId, quantity]) => {
             const staticData = ITEM_CATALOG[itemId];
 
-            // Handle missing items gracefully
+            // Handle missing itemMap gracefully
             if (!staticData) {
                 console.error(`[HYDRATION ERROR] Item ID ${itemId} found in user ${userId}'s ${SK} but missing from ITEM_CATALOG.`);            
             }
@@ -45,14 +65,14 @@ export class InventoryService {
         return hydratedBag;
     }
 
-    public async getStorage(userId: string, page?: number): Promise<{ items: Item[]; totalPages: number; currentPage: number; hasMore: boolean }> {
+    public async getStorage(userId: string, page?: number): Promise<{ itemMap: Item[]; totalPages: number; currentPage: number; hasMore: boolean }> {
         const currentPage = page || 1;
         const limit = STORAGE_PAGE_SIZE;
         const PK = `User#${userId}`;
         const SK = "Inventory#storage";
 
-        const result = await dynamoDBService.getEntity<{ items?: Record<string, number> }>(table, {PK: PK, SK: SK});
-        const rawStorage = result?.items || {};
+        const result = await dynamoDBService.getEntity<{ itemMap?: Record<string, number> }>(table, {PK: PK, SK: SK});
+        const rawStorage = result?.itemMap || {};
         
         // Convert to array and hydrate with catalog data
         const allItems: Item[] = Object.entries(rawStorage).map(([itemId, quantity]) => {
@@ -76,7 +96,7 @@ export class InventoryService {
         const paginatedItems = allItems.slice(startIndex, endIndex);
         
         return {
-            items: paginatedItems,
+            itemMap: paginatedItems,
             totalPages,
             currentPage,
             hasMore: currentPage < totalPages
@@ -87,8 +107,8 @@ export class InventoryService {
         const PK = `User#${userId}`;
         const SK = `Inventory#${location}`;
 
-        const result = await dynamoDBService.getEntity<{ items?: Record<string, number> }>(table, {PK: PK, SK: SK});
-        const rawInventory = result?.items || {};
+        const result = await dynamoDBService.getEntity<{ itemMap?: Record<string, number> }>(table, {PK: PK, SK: SK});
+        const rawInventory = result?.itemMap || {};
         
         // Return count of unique item types (not total quantity)
         return Object.keys(rawInventory).length;
@@ -109,15 +129,16 @@ export class InventoryService {
 
         const PK = `User#${userId}`;
         const SK = `Inventory#${location}`;
-        const itemPath = `items.${itemId}`;
 
+        // Ensure itemMap exists before updating
+        await this.ensureInventoryExists(userId, location);
+
+        // Now we can safely update the item
         await dynamoDBService.updateEntity(
             table, 
             {PK: PK, SK: SK},
-            `SET ${itemPath} = if_not_exists(${itemPath}, :start) + :q, PK = if_not_exists(PK, :pk), SK = if_not_exists(SK, :sk)`,
-            {":q": quantity, ":start": 0, ":pk": PK, ":sk": SK},
-            undefined,
-            "NONE"
+            `SET itemMap.${itemId} = if_not_exists(itemMap.${itemId}, :start) + :q`,
+            {":q": quantity, ":start": 0}
         )
     }
 
@@ -127,34 +148,32 @@ export class InventoryService {
         }
         const PK = `User#${userId}`;
         const SK = `Inventory#${location}`;
-        const itemPath = `items.${itemId}`;
 
         const response = await dynamoDBService.updateEntity(
             table, 
             {PK: PK, SK: SK},
-            `SET ${itemPath} = ${itemPath} - :q`,
+            `SET itemMap.${itemId} = itemMap.${itemId} - :q`,
             {":q" : quantity},
-            `attribute_exists(${itemPath}) AND ${itemPath} >= :q`,
+            `attribute_exists(itemMap.${itemId}) AND itemMap.${itemId} >= :q`,
             "ALL_NEW"
         )
 
         // The new quantity is returned in the response attributes
-        const newQuantity = response.Attributes?.items?.[itemId];
+        const newQuantity = response.Attributes?.itemMap?.[itemId];
 
         if (newQuantity !== undefined && newQuantity <= 0) {
             // If the quantity is 0 or less, we proceed to clean up the item key.
-            const itemPath = `items.${itemId}`;
-        
             try {
                 await dynamoDBService.updateEntity(
                     table, {PK: PK, SK: SK},
-                    `REMOVE ${itemPath}`
+                    `REMOVE itemMap.${itemId}`
                 );
                 console.log(`Cleaned up zero quantity item ${itemId} from ${SK} for user ${PK}.`);
             } catch (error) {
                 // Log the error but don't re-throw, as the primary operation (subtraction) succeeded.
                 console.error(`Cleanup failed for ${itemId}:`, error);
-            }                return 0;
+            }
+            return 0;
         }
     
         return newQuantity || 0; // Should be > 0 here
@@ -172,19 +191,21 @@ export class InventoryService {
         const PK = `User#${userId}`;
         const fromSK = `Inventory#${from}`;
         const toSK = `Inventory#${to}`;
-        const itemPath = `items.${itemId}`;
 
         // Check if moving to bag would exceed capacity
         if (to === 'bag') {
             const currentCount = await this.getItemCount(userId, 'bag');
             // Check if this is a new item type (not already in bag)
-            const bagResult = await dynamoDBService.getEntity<{ items?: Record<string, number> }>(table, {PK: PK, SK: toSK});
-            const bagItems = bagResult?.items || {};
+            const bagResult = await dynamoDBService.getEntity<{ itemMap?: Record<string, number> }>(table, {PK: PK, SK: toSK});
+            const bagItems = bagResult?.itemMap || {};
             
             if (!bagItems[itemId] && currentCount >= MAX_INVENTORY_CAPACITY) {
                 throw new Error(`Bag is full. Cannot add new item types. Current: ${currentCount}/${MAX_INVENTORY_CAPACITY}`);
             }
         }
+
+        // Ensure destination itemMap exists before transaction
+        await this.ensureInventoryExists(userId, to);
 
         // Use transaction to ensure atomicity
         const transactItems = [
@@ -193,22 +214,21 @@ export class InventoryService {
                 Update: {
                     TableName: table,
                     Key: { PK: PK, SK: fromSK },
-                    UpdateExpression: `SET ${itemPath} = ${itemPath} - :q`,
-                    ConditionExpression: `attribute_exists(${itemPath}) AND ${itemPath} >= :q`,
+                    UpdateExpression: `SET itemMap.${itemId} = itemMap.${itemId} - :q`,
+                    ConditionExpression: `attribute_exists(itemMap.${itemId}) AND itemMap.${itemId} >= :q`,
                     ExpressionAttributeValues: { ":q": quantity }
                 }
             },
             {
-                // Add to destination
+                // Add to destination (itemMap now exists)
                 Update: {
                     TableName: table,
                     Key: { PK: PK, SK: toSK },
-                    UpdateExpression: `SET ${itemPath} = if_not_exists(${itemPath}, :start) + :q, PK = if_not_exists(PK, :pk), SK = if_not_exists(SK, :sk)`,
+                    UpdateExpression: `SET itemMap.${itemId} = if_not_exists(itemMap.${itemId}, :start) + :q`,
+                    ConditionExpression: `attribute_exists(itemMap)`,
                     ExpressionAttributeValues: { 
                         ":q": quantity, 
-                        ":start": 0,
-                        ":pk": PK,
-                        ":sk": toSK
+                        ":start": 0
                     }
                 }
             }
@@ -217,15 +237,15 @@ export class InventoryService {
         await dynamoDBService.transactWriteItems(transactItems);
 
         // Clean up if quantity becomes zero in source
-        const fromResult = await dynamoDBService.getEntity<{ items?: Record<string, number> }>(table, {PK: PK, SK: fromSK});
-        const remainingQuantity = fromResult?.items?.[itemId];
+        const fromResult = await dynamoDBService.getEntity<{ itemMap?: Record<string, number> }>(table, {PK: PK, SK: fromSK});
+        const remainingQuantity = fromResult?.itemMap?.[itemId];
 
         if (remainingQuantity !== undefined && remainingQuantity <= 0) {
             try {
                 await dynamoDBService.updateEntity(
                     table,
                     { PK: PK, SK: fromSK },
-                    `REMOVE ${itemPath}`
+                    `REMOVE itemMap.${itemId}`
                 );
                 console.log(`Cleaned up zero quantity item ${itemId} from ${fromSK} for user ${PK}.`);
             } catch (error) {
@@ -238,8 +258,8 @@ export class InventoryService {
         const PK = `User#${userId}`;
         const SK = `Inventory#${location}`;
 
-        const result = await dynamoDBService.getEntity<{ items?: Record<string, number> }>(table, {PK: PK, SK: SK});
-        const rawInventory = result?.items || {};
+        const result = await dynamoDBService.getEntity<{ itemMap?: Record<string, number> }>(table, {PK: PK, SK: SK});
+        const rawInventory = result?.itemMap || {};
         
         if (!rawInventory[itemId]) {
             return false;
@@ -256,8 +276,8 @@ export class InventoryService {
         const PK = `User#${userId}`;
         const SK = `Inventory#${location}`;
         
-        const result = await dynamoDBService.getEntity<{ items?: Record<string, number> }>(table, {PK: PK, SK: SK});
-        const rawInventory = result?.items || {};
+        const result = await dynamoDBService.getEntity<{ itemMap?: Record<string, number> }>(table, {PK: PK, SK: SK});
+        const rawInventory = result?.itemMap || {};
         
         // If item already exists, we can always add more
         if (rawInventory[itemId]) {

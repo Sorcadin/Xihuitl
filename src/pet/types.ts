@@ -25,18 +25,6 @@ export interface SpeciesData {
 export type ItemTrait = 'edible'; // In the future: 'edible' | 'tradable' | 'etc'
 
 /**
- * Inventory entity structure stored in DynamoDB
- * PK: User#${userId}
- * SK: Inventory#bag or Inventory#storage
- * items: Map of itemId to quantity for efficient atomic updates
- */
-export interface Inventory {
-    items: {
-        [itemId: string]: number;
-    };
-}
-
-/**
  * ItemEntity represents the structure of a single item with its quantity
  * Used as a component of the Item type
  */

@@ -44,8 +44,7 @@ export class DailyService {
         await dynamoDBService.updateEntity(
             table, {PK: PK, SK: SK}, 
             "SET lastDailyReward = :t",
-            { ":t": timestamp.getTime() },
-            "attribute_exists(PK)",
+            { ":t": timestamp.getTime() }
         );
     }
 }

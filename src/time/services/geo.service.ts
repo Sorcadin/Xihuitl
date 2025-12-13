@@ -1,5 +1,4 @@
 import axios from 'axios';
-import { locationTimezoneService } from './timezone.service';
 
 const GOOGLE_API_KEY = process.env.GOOGLE_API_KEY;
 const geocodeUrlBase = `https://maps.googleapis.com/maps/api/geocode/json?key=${GOOGLE_API_KEY}`;
@@ -59,16 +58,6 @@ export const getTimezoneFromLocation = async (
             return null;
         }
 
-        // Check if location is already stored
-        const stored = await locationTimezoneService.getLocation(sanitizedLocation);
-        if (stored) {
-            console.log(`Found stored location: ${sanitizedLocation}`);
-            return {
-                timezone: stored.timezone,
-                address: stored.display_location
-            };
-        }
-
         // Make API request for geocoding
         console.log(`Making Google Geocoding API request for: ${sanitizedLocation}`);
         const geocodeUrl = `${geocodeUrlBase}&address=${encodeURIComponent(sanitizedLocation)}`;
@@ -94,9 +83,6 @@ export const getTimezoneFromLocation = async (
         }
 
         const timezone = timezoneResponse.data.timeZoneId;
-
-        // Store the result for future lookups
-        await locationTimezoneService.setLocation(sanitizedLocation, timezone, formattedAddress);
 
         return {
             timezone,

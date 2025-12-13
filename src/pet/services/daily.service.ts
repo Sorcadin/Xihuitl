@@ -1,13 +1,7 @@
 import { dynamoDBService } from "../../services/dynamodb.service";
+import { Profile } from "../types";
 
 const table = process.env.PETS_TABLE || "xiuh-pets";
-
-interface DailyClaimItem {
-    user_id: string;
-    // last_claimed_at is stored as a number (milliseconds since epoch)
-    last_claimed_at?: number; 
-}
-
 // Define the cooldown period (20 hours in milliseconds)
 export const COOLDOWN_DURATION_MS = 20 * 60 * 60 * 1000;
 
@@ -28,10 +22,13 @@ export class DailyService {
 
     // Fetches the last claim time
     public async getLastClaimTime(userId: string): Promise<Date | null> {
-        const result = await dynamoDBService.getItem<DailyClaimItem>(table, { user_id: userId })
+        const PK = `User#${userId}`;
+        const SK = "Profile";
 
-        if (result && result.last_claimed_at) {
-            const lastClaimedTimestamp = result.last_claimed_at;
+        const result = await dynamoDBService.getEntity<Profile>(table, {PK: PK, SK: SK})
+
+        if (result && result.lastDailyReward) {
+            const lastClaimedTimestamp = result.lastDailyReward;
             return new Date(lastClaimedTimestamp);
         }
         
@@ -41,11 +38,14 @@ export class DailyService {
     
     // Updates the last claim time in the database
     public async setLastClaimTime(userId: string, timestamp: Date): Promise<void> {
-        await dynamoDBService.updateItem(
-            table,
-            { user_id: userId }, 
-            "SET last_claimed_at = :t",
-            { ":t": timestamp.getTime() }
+        const PK = `User#${userId}`;
+        const SK = "Profile";
+
+        await dynamoDBService.updateEntity(
+            table, {PK: PK, SK: SK}, 
+            "SET lastDailyReward = :t",
+            { ":t": timestamp.getTime() },
+            "attribute_exists(PK)",
         );
     }
 }

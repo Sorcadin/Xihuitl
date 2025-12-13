@@ -1,17 +1,8 @@
-import { dynamoDBService, resolveTableName } from "../../services/dynamodb.service";
-import { UserTimezone, TimezoneData } from "../types";
+import { dynamoDBService } from "../../services/dynamodb.service";
+import { UserTimezone } from "../types";
 
 // Table name caches
-const userTableCache: { value: string | null } = { value: null };
-const timezoneTableCache: { value: string | null } = { value: null };
-
-async function resolveUserTableName(): Promise<string> {
-    return resolveTableName("DYNAMO_TABLE", "/xiuh/user-table-name", userTableCache);
-}
-
-async function resolveTimezoneTableName(): Promise<string> {
-    return resolveTableName("TIMEZONE_TABLE", "/xiuh/timezone-table-name", timezoneTableCache);
-}
+const table = process.env.TIMEZONE_TABLE || "xiuh-timezones";
 
 /**
  * Service for managing user timezone data in DynamoDB
@@ -55,7 +46,6 @@ export class UserTimezoneService {
     }
 
     public async saveUser(userId: string, timezone: string, location: string): Promise<void> {
-        const tableName = await resolveUserTableName();
         const item: UserTimezone = {
             user_id: userId,
             timezone: timezone,
@@ -63,7 +53,7 @@ export class UserTimezoneService {
             fetched_at: Date.now()
         };
 
-        await dynamoDBService.putItem(tableName, {
+        await dynamoDBService.putEntity(table, {
             user_id: userId,
             timezone: timezone,
             display_location: location
@@ -73,35 +63,9 @@ export class UserTimezoneService {
     }
 
     private async batchFetch(userIds: string[]): Promise<UserTimezone[]> {
-        const tableName = await resolveUserTableName();
         const keys = userIds.map(id => ({ user_id: id }));
-        return dynamoDBService.batchGetItems<UserTimezone>(tableName, keys);
-    }
-}
-
-/**
- * Service for managing location timezone data in DynamoDB
- */
-export class LocationTimezoneService {
-    public async getLocation(locationName: string): Promise<TimezoneData | null> {
-        const tableName = await resolveTimezoneTableName();
-        return dynamoDBService.getItem<TimezoneData>(tableName, { location_name: locationName });
-    }
-
-    public async setLocation(locationName: string, timezone: string, displayLocation: string): Promise<void> {
-        const tableName = await resolveTimezoneTableName();
-        
-        const item: TimezoneData = {
-            location_name: locationName,
-            timezone: timezone,
-            display_location: displayLocation,
-            cached_at: Date.now()
-        };
-
-        await dynamoDBService.putItem(tableName, item);
+        return dynamoDBService.batchGetEntities<UserTimezone>(table, keys);
     }
 }
 
 export const userTimezoneService = new UserTimezoneService();
-export const locationTimezoneService = new LocationTimezoneService();
-

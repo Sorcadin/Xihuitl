@@ -1,23 +1,20 @@
-import { ItemDefinition, ItemTrait } from '../types';
+import { Item, ItemData, ItemTrait } from '../types';
 
-export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
+export const ITEM_CATALOG: Record<string, ItemData> = {
     // Omelette varieties
     OMELETTE_PLAIN: {
-        id: 'OMELETTE_PLAIN',
         name: 'Plain Omelette',
         description: 'Simple and classic',
         traits: ['edible'],
         hungerRestoration: 20
     },
     OMELETTE_MUSHROOM: {
-        id: 'OMELETTE_MUSHROOM',
         name: 'Mushroom Omelette',
         description: 'Savory and subtle',
         traits: ['edible'],
         hungerRestoration: 20
     },
     OMELETTE_PEPPER: {
-        id: 'OMELETTE_PEPPER',
         name: 'Pepper Omelette',
         description: 'Vibrant and zesty',
         traits: ['edible'],
@@ -25,20 +22,25 @@ export const ITEM_DEFINITIONS: Record<string, ItemDefinition> = {
     }
 };
 
-export function getItemById(id: string): ItemDefinition | undefined {
-    // return ITEM_DEFINITIONS.find(item => item.id === id);
-    return ITEM_DEFINITIONS[id]
+const OMELETTE_IDS = ['OMELETTE_PLAIN', 'OMELETTE_MUSHROOM', 'OMELETTE_PEPPER'];
+
+export function getItemDataById(id: string): ItemData | undefined {
+    return ITEM_CATALOG[id]
 }
 
-export function getRandomOmelette(): ItemDefinition {
-    const OMELETTE_IDS = ['OMELETTE_PLAIN', 'OMELETTE_MUSHROOM', 'OMELETTE_PEPPER'];
+export function getRandomOmelette(): Item {
     const randomIndex = Math.floor(Math.random() * OMELETTE_IDS.length);
-    return ITEM_DEFINITIONS[OMELETTE_IDS[randomIndex]];
+    const omeletteData = ITEM_CATALOG[OMELETTE_IDS[randomIndex]];
+    return {
+        itemId: OMELETTE_IDS[randomIndex],
+        quantity: 1,
+        ...omeletteData
+    } as Item;
 }
 
 /**
  * Check if an item has a specific trait
  */
-export function hasTrait(item: ItemDefinition, trait: ItemTrait): boolean {
+export function hasTrait(item: ItemData, trait: ItemTrait): boolean {
     return item.traits.includes(trait);
 }

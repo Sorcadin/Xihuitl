@@ -22,10 +22,10 @@ export class XiuhStack extends cdk.Stack {
     super(scope, id, props);
 
     // ========================================
-    // DynamoDB Table for User Timezones
+    // DynamoDB Table for Timezones
     // ========================================
-    const userTable = new dynamodb.Table(this, 'UserTimezonesTable', {
-      tableName: 'xiuh-users',
+    const timezoneTable = new dynamodb.Table(this, 'UserTimezonesTable', {
+      tableName: 'xiuh-time',
       partitionKey: {
         name: 'user_id',
         type: dynamodb.AttributeType.STRING,
@@ -38,48 +38,16 @@ export class XiuhStack extends cdk.Stack {
     });
 
     // ========================================
-    // DynamoDB Table for Locations
-    // ========================================
-    const timezoneTable = new dynamodb.Table(this, 'TimezoneTable', {
-      tableName: 'xiuh-timezone-data',
-      partitionKey: {
-        name: 'location_name',
-        type: dynamodb.AttributeType.STRING,
-      },
-      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST, // On-demand pricing (free tier friendly)
-      removalPolicy: cdk.RemovalPolicy.RETAIN, // Keep location data permanently
-      pointInTimeRecoverySpecification: {
-        pointInTimeRecoveryEnabled: false, // Disable to stay within free tier
-      },
-    });
-
-    // ========================================
     // DynamoDB Table for Pets
     // ========================================
     const petsTable = new dynamodb.Table(this, 'PetsTable', {
       tableName: 'xiuh-pets',
       partitionKey: {
-        name: 'user_id',
-        type: dynamodb.AttributeType.STRING,
-      },
-      billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
-      removalPolicy: cdk.RemovalPolicy.RETAIN,
-      pointInTimeRecoverySpecification: {
-        pointInTimeRecoveryEnabled: false,
-      },
-    });
-
-    // ========================================
-    // DynamoDB Table for Inventory
-    // ========================================
-    const inventoryTable = new dynamodb.Table(this, 'InventoryTable', {
-      tableName: 'xiuh-inventory',
-      partitionKey: {
-        name: 'user_id',
+        name: 'PK',
         type: dynamodb.AttributeType.STRING,
       },
       sortKey: {
-        name: 'item_id',
+        name: 'SK',
         type: dynamodb.AttributeType.STRING,
       },
       billingMode: dynamodb.BillingMode.PAY_PER_REQUEST,
@@ -97,47 +65,17 @@ export class XiuhStack extends cdk.Stack {
       publicReadAccess: false,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
       autoDeleteObjects: false,
+      lifecycleRules: [{
+        transitions: [{
+          storageClass: s3.StorageClass.INTELLIGENT_TIERING,
+          transitionAfter: cdk.Duration.days(0),  // Immediate
+        }],    
+      }]
     });
 
     // ========================================
     // SSM Parameters for Configuration
     // ========================================
-    
-    // Store the table names in SSM for runtime lookup
-    new ssm.StringParameter(this, 'UserTableNameParameter', {
-      parameterName: '/xiuh/user-table-name',
-      stringValue: userTable.tableName,
-      description: 'DynamoDB table name for Xihuitl users',
-      tier: ssm.ParameterTier.STANDARD, // Free tier
-    });
-
-    new ssm.StringParameter(this, 'TimezoneTableNameParameter', {
-      parameterName: '/xiuh/timezone-table-name',
-      stringValue: timezoneTable.tableName,
-      description: 'DynamoDB table name for timezone data',
-      tier: ssm.ParameterTier.STANDARD, // Free tier
-    });
-
-    new ssm.StringParameter(this, 'PetsTableNameParameter', {
-      parameterName: '/xiuh/pets-table-name',
-      stringValue: petsTable.tableName,
-      description: 'DynamoDB table name for pets',
-      tier: ssm.ParameterTier.STANDARD,
-    });
-
-    new ssm.StringParameter(this, 'InventoryTableNameParameter', {
-      parameterName: '/xiuh/inventory-table-name',
-      stringValue: inventoryTable.tableName,
-      description: 'DynamoDB table name for inventory',
-      tier: ssm.ParameterTier.STANDARD,
-    });
-
-    new ssm.StringParameter(this, 'PetImagesBucketNameParameter', {
-      parameterName: '/xiuh/pet-images-bucket-name',
-      stringValue: petImagesBucket.bucketName,
-      description: 'S3 bucket name for pet images',
-      tier: ssm.ParameterTier.STANDARD,
-    });
 
     // Reference to existing parameters that user must create manually:
     // - /xiuh/ec2-keypair-name: Name of EC2 key pair for SSH access
@@ -197,10 +135,8 @@ export class XiuhStack extends cdk.Stack {
     });
 
     // Grant DynamoDB permissions
-    userTable.grantReadWriteData(botRole);
     timezoneTable.grantReadWriteData(botRole);
     petsTable.grantReadWriteData(botRole);
-    inventoryTable.grantReadWriteData(botRole);
 
     // Grant S3 read permissions for pet images
     petImagesBucket.grantRead(botRole);
@@ -333,27 +269,15 @@ export class XiuhStack extends cdk.Stack {
     });
 
     new cdk.CfnOutput(this, 'DynamoDBTableName', {
-      value: userTable.tableName,
-      description: 'DynamoDB Table Name for user timezones',
-      exportName: 'XiuhUserTimezonesTable',
-    });
-
-    new cdk.CfnOutput(this, 'TimezoneTableName', {
       value: timezoneTable.tableName,
-      description: 'DynamoDB Table Name for timezone data',
-      exportName: 'XiuhTimezoneTable',
+      description: 'DynamoDB Table Name for timezones',
+      exportName: 'XiuhUserTimezonesTable',
     });
 
     new cdk.CfnOutput(this, 'PetsTableName', {
       value: petsTable.tableName,
       description: 'DynamoDB Table Name for pets',
       exportName: 'XiuhPetsTable',
-    });
-
-    new cdk.CfnOutput(this, 'InventoryTableName', {
-      value: inventoryTable.tableName,
-      description: 'DynamoDB Table Name for inventory',
-      exportName: 'XiuhInventoryTable',
     });
 
     new cdk.CfnOutput(this, 'PetImagesBucketName', {

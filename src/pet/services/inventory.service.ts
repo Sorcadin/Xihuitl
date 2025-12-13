@@ -1,46 +1,79 @@
-import { dynamoDBService, resolveTableName } from "../../services/dynamodb.service";
-import { InventoryItem, MAX_INVENTORY_CAPACITY, STORAGE_PAGE_SIZE } from "../types";
+import { dynamoDBService } from "../../services/dynamodb.service";
+import { ItemEntity, Item, MAX_INVENTORY_CAPACITY, STORAGE_PAGE_SIZE } from "../types";
+import { ITEM_CATALOG } from "../constants/items";
 
-// Table name cache
-const inventoryTableCache: { value: string | null } = { value: null };
+const table = process.env.PETS_TABLE || "xiuh-pets";
 
-async function resolveInventoryTableName(): Promise<string> {
-    return resolveTableName("INVENTORY_TABLE", "/xiuh/inventory-table-name", inventoryTableCache);
-}
 
-/**
- * Service for managing inventory and storage items in DynamoDB
+/** * 
+ * DynamoDB Structure of inventory:
+ * {
+ *   PK: "User#${userId}",
+ *   SK: "Inventory#bag" or "Inventory#storage",
+ *   items: {
+ *     "apple": 5,
+ *     "banana": 3
+ *   }
+ * }
+ * 
  */
+
 export class InventoryService {
-    public async getInventory(userId: string): Promise<InventoryItem[]> {
-        const tableName = await resolveInventoryTableName();
-        const result = await dynamoDBService.queryItems<InventoryItem>(
-            tableName,
-            'user_id = :userId',
-            { ':userId': userId }
-        );
+    public async getBag(userId: string): Promise<Item[]> {
+        const PK = `User#${userId}`;
+        const SK = "Inventory#bag";
+
+        const result = await dynamoDBService.getEntity<{ items?: Record<string, number> }>(table, {PK: PK, SK: SK});
+        const rawBag = result?.items || {};
         
-        return result.items.filter(item => item.location === 'inventory');
+        const hydratedBag: Item[] = Object.entries(rawBag).map(([itemId, quantity]) => {
+            const staticData = ITEM_CATALOG[itemId];
+
+            // Handle missing items gracefully
+            if (!staticData) {
+                console.error(`[HYDRATION ERROR] Item ID ${itemId} found in user ${userId}'s ${SK} but missing from ITEM_CATALOG.`);            
+            }
+
+            // Use the spread operator to cleanly merge the properties
+            return {
+                itemId,
+                quantity,
+                ...staticData,
+            } as Item;
+        });
+
+        return hydratedBag;
     }
 
-    public async getStorage(userId: string, page?: number): Promise<{ items: InventoryItem[]; totalPages: number; currentPage: number; hasMore: boolean }> {
-        const tableName = await resolveInventoryTableName();
+    public async getStorage(userId: string, page?: number): Promise<{ items: Item[]; totalPages: number; currentPage: number; hasMore: boolean }> {
         const currentPage = page || 1;
         const limit = STORAGE_PAGE_SIZE;
+        const PK = `User#${userId}`;
+        const SK = "Inventory#storage";
+
+        const result = await dynamoDBService.getEntity<{ items?: Record<string, number> }>(table, {PK: PK, SK: SK});
+        const rawStorage = result?.items || {};
         
-        // Get all storage items (we'll paginate in memory for simplicity)
-        // In production, you might want to use a GSI or scan with filter
-        const result = await dynamoDBService.queryItems<InventoryItem>(
-            tableName,
-            'user_id = :userId',
-            { ':userId': userId }
-        );
-        
-        const storageItems = result.items.filter(item => item.location === 'storage');
-        const totalPages = Math.ceil(storageItems.length / limit);
+        // Convert to array and hydrate with catalog data
+        const allItems: Item[] = Object.entries(rawStorage).map(([itemId, quantity]) => {
+            const staticData = ITEM_CATALOG[itemId];
+
+            if (!staticData) {
+                console.error(`[HYDRATION ERROR] Item ID ${itemId} found in user ${userId}'s ${SK} but missing from ITEM_CATALOG.`);
+            }
+
+            return {
+                itemId,
+                quantity,
+                ...staticData,
+            } as Item;
+        });
+
+        // Paginate in memory
+        const totalPages = Math.ceil(allItems.length / limit);
         const startIndex = (currentPage - 1) * limit;
         const endIndex = startIndex + limit;
-        const paginatedItems = storageItems.slice(startIndex, endIndex);
+        const paginatedItems = allItems.slice(startIndex, endIndex);
         
         return {
             items: paginatedItems,
@@ -50,129 +83,190 @@ export class InventoryService {
         };
     }
 
-    public async getItemCount(userId: string, location: 'inventory' | 'storage'): Promise<number> {
-        const items = location === 'inventory' 
-            ? await this.getInventory(userId)
-            : (await this.getStorage(userId)).items;
+    public async getItemCount(userId: string, location: 'bag' | 'storage'): Promise<number> {
+        const PK = `User#${userId}`;
+        const SK = `Inventory#${location}`;
+
+        const result = await dynamoDBService.getEntity<{ items?: Record<string, number> }>(table, {PK: PK, SK: SK});
+        const rawInventory = result?.items || {};
         
-        return items.reduce((sum, item) => sum + item.quantity, 0);
+        // Return count of unique item types (not total quantity)
+        return Object.keys(rawInventory).length;
     }
 
-    public async addItem(userId: string, itemId: string, quantity: number, location: 'inventory' | 'storage'): Promise<void> {
-        if (location === 'inventory') {
-            const currentCount = await this.getItemCount(userId, 'inventory');
-            if (currentCount + quantity > MAX_INVENTORY_CAPACITY) {
-                throw new Error(`Inventory capacity exceeded. Current: ${currentCount}/${MAX_INVENTORY_CAPACITY}`);
+    public async addItem(userId: string, itemId: string, quantity: number, location: 'bag' | 'storage'): Promise<void> {
+        if (quantity <= 0) {
+            throw new Error("Quantity to add must be positive.");
+        }
+        
+        // Check capacity only if adding to bag and it's a new item type
+        if (location === 'bag') {
+            const canAdd = await this.canAddItem(userId, itemId, location);
+            if (!canAdd) {
+                throw new Error(`Bag is full. Cannot add new item types. Maximum capacity: ${MAX_INVENTORY_CAPACITY}`);
             }
         }
 
-        const tableName = await resolveInventoryTableName();
-        // Use composite key: item_id#location as sort key
-        const compositeItemId = `${itemId}#${location}`;
-        const existing = await dynamoDBService.getItem<InventoryItem>(
-            tableName,
-            { user_id: userId, item_id: compositeItemId }
-        );
+        const PK = `User#${userId}`;
+        const SK = `Inventory#${location}`;
+        const itemPath = `items.${itemId}`;
 
-        if (existing) {
-            const updated: InventoryItem = {
-                ...existing,
-                quantity: existing.quantity + quantity
-            };
-            await dynamoDBService.putItem(tableName, updated);
-        } else {
-            const newItem: InventoryItem = {
-                user_id: userId,
-                item_id: compositeItemId,
-                quantity: quantity,
-                location: location
-            };
-            await dynamoDBService.putItem(tableName, newItem);
-        }
+        await dynamoDBService.updateEntity(
+            table, 
+            {PK: PK, SK: SK},
+            `SET ${itemPath} = if_not_exists(${itemPath}, :start) + :q, PK = if_not_exists(PK, :pk), SK = if_not_exists(SK, :sk)`,
+            {":q": quantity, ":start": 0, ":pk": PK, ":sk": SK},
+            undefined,
+            "NONE"
+        )
     }
 
-    public async removeItem(userId: string, itemId: string, quantity: number, location: 'inventory' | 'storage'): Promise<boolean> {
-        const tableName = await resolveInventoryTableName();
-        const compositeItemId = `${itemId}#${location}`;
-        const key = { user_id: userId, item_id: compositeItemId };
-        const existing = await dynamoDBService.getItem<InventoryItem>(tableName, key);
-
-        if (!existing || existing.quantity < quantity) {
-            return false;
+    public async removeItem(userId: string, itemId: string, quantity: number, location: 'bag' | 'storage'): Promise<number> {    
+        if (quantity <= 0) {
+            throw new Error("Quantity to remove must be positive.");
         }
+        const PK = `User#${userId}`;
+        const SK = `Inventory#${location}`;
+        const itemPath = `items.${itemId}`;
 
-        if (existing.quantity === quantity) {
-            // Delete the item if quantity reaches zero
-            // Note: DynamoDB doesn't have a delete method in our service, so we'll set quantity to 0
-            // In production, you'd want to actually delete the item
-            await dynamoDBService.putItem(tableName, { ...existing, quantity: 0 });
-        } else {
-            const updated: InventoryItem = {
-                ...existing,
-                quantity: existing.quantity - quantity
-            };
-            await dynamoDBService.putItem(tableName, updated);
+        const response = await dynamoDBService.updateEntity(
+            table, 
+            {PK: PK, SK: SK},
+            `SET ${itemPath} = ${itemPath} - :q`,
+            {":q" : quantity},
+            `attribute_exists(${itemPath}) AND ${itemPath} >= :q`,
+            "ALL_NEW"
+        )
+
+        // The new quantity is returned in the response attributes
+        const newQuantity = response.Attributes?.items?.[itemId];
+
+        if (newQuantity !== undefined && newQuantity <= 0) {
+            // If the quantity is 0 or less, we proceed to clean up the item key.
+            const itemPath = `items.${itemId}`;
+        
+            try {
+                await dynamoDBService.updateEntity(
+                    table, {PK: PK, SK: SK},
+                    `REMOVE ${itemPath}`
+                );
+                console.log(`Cleaned up zero quantity item ${itemId} from ${SK} for user ${PK}.`);
+            } catch (error) {
+                // Log the error but don't re-throw, as the primary operation (subtraction) succeeded.
+                console.error(`Cleanup failed for ${itemId}:`, error);
+            }                return 0;
         }
-
-        return true;
+    
+        return newQuantity || 0; // Should be > 0 here
     }
 
-    public async moveItem(userId: string, itemId: string, quantity: number, from: 'inventory' | 'storage', to: 'inventory' | 'storage'): Promise<boolean> {
+    public async moveItem(userId: string, itemId: string, quantity: number, from: 'bag' | 'storage', to: 'bag' | 'storage'): Promise<void> {
         if (from === to) {
-            return false;
+            throw new Error("Source and destination locations are the same.");
         }
 
-        // Check capacity if moving to inventory
-        if (to === 'inventory') {
-            const currentCount = await this.getItemCount(userId, 'inventory');
-            if (currentCount + quantity > MAX_INVENTORY_CAPACITY) {
-                throw new Error(`Inventory capacity exceeded. Current: ${currentCount}/${MAX_INVENTORY_CAPACITY}`);
+        if (quantity <= 0) {
+            throw new Error("Quantity to move must be positive.");
+        }
+
+        const PK = `User#${userId}`;
+        const fromSK = `Inventory#${from}`;
+        const toSK = `Inventory#${to}`;
+        const itemPath = `items.${itemId}`;
+
+        // Check if moving to bag would exceed capacity
+        if (to === 'bag') {
+            const currentCount = await this.getItemCount(userId, 'bag');
+            // Check if this is a new item type (not already in bag)
+            const bagResult = await dynamoDBService.getEntity<{ items?: Record<string, number> }>(table, {PK: PK, SK: toSK});
+            const bagItems = bagResult?.items || {};
+            
+            if (!bagItems[itemId] && currentCount >= MAX_INVENTORY_CAPACITY) {
+                throw new Error(`Bag is full. Cannot add new item types. Current: ${currentCount}/${MAX_INVENTORY_CAPACITY}`);
             }
         }
 
-        // Remove from source
-        const removed = await this.removeItem(userId, itemId, quantity, from);
-        if (!removed) {
+        // Use transaction to ensure atomicity
+        const transactItems = [
+            {
+                // Subtract from source
+                Update: {
+                    TableName: table,
+                    Key: { PK: PK, SK: fromSK },
+                    UpdateExpression: `SET ${itemPath} = ${itemPath} - :q`,
+                    ConditionExpression: `attribute_exists(${itemPath}) AND ${itemPath} >= :q`,
+                    ExpressionAttributeValues: { ":q": quantity }
+                }
+            },
+            {
+                // Add to destination
+                Update: {
+                    TableName: table,
+                    Key: { PK: PK, SK: toSK },
+                    UpdateExpression: `SET ${itemPath} = if_not_exists(${itemPath}, :start) + :q, PK = if_not_exists(PK, :pk), SK = if_not_exists(SK, :sk)`,
+                    ExpressionAttributeValues: { 
+                        ":q": quantity, 
+                        ":start": 0,
+                        ":pk": PK,
+                        ":sk": toSK
+                    }
+                }
+            }
+        ];
+
+        await dynamoDBService.transactWriteItems(transactItems);
+
+        // Clean up if quantity becomes zero in source
+        const fromResult = await dynamoDBService.getEntity<{ items?: Record<string, number> }>(table, {PK: PK, SK: fromSK});
+        const remainingQuantity = fromResult?.items?.[itemId];
+
+        if (remainingQuantity !== undefined && remainingQuantity <= 0) {
+            try {
+                await dynamoDBService.updateEntity(
+                    table,
+                    { PK: PK, SK: fromSK },
+                    `REMOVE ${itemPath}`
+                );
+                console.log(`Cleaned up zero quantity item ${itemId} from ${fromSK} for user ${PK}.`);
+            } catch (error) {
+                console.error(`Cleanup failed for ${itemId}:`, error);
+            }
+        }
+    }
+
+    public async hasItem(userId: string, itemId: string, quantity: number, location: 'bag' | 'storage'): Promise<boolean> {
+        const PK = `User#${userId}`;
+        const SK = `Inventory#${location}`;
+
+        const result = await dynamoDBService.getEntity<{ items?: Record<string, number> }>(table, {PK: PK, SK: SK});
+        const rawInventory = result?.items || {};
+        
+        if (!rawInventory[itemId]) {
             return false;
         }
 
-        // Add to destination
-        await this.addItem(userId, itemId, quantity, to);
-        return true;
+        return rawInventory[itemId] >= quantity;
     }
 
-    public async hasItem(userId: string, itemId: string, quantity: number, location: 'inventory' | 'storage'): Promise<boolean> {
-        const tableName = await resolveInventoryTableName();
-        const compositeItemId = `${itemId}#${location}`;
-        const item = await dynamoDBService.getItem<InventoryItem>(
-            tableName,
-            { user_id: userId, item_id: compositeItemId }
-        );
-
-        return item ? item.quantity >= quantity : false;
-    }
-
-    public async canAddItem(userId: string, quantity: number, location: 'inventory' | 'storage'): Promise<boolean> {
+    public async canAddItem(userId: string, itemId: string, location: 'bag' | 'storage'): Promise<boolean> {
         if (location === 'storage') {
-            return true; // Storage is uncapped
+            return true; // Storage is unlimited
         }
         
-        const currentCount = await this.getItemCount(userId, 'inventory');
-        return (currentCount + quantity) <= MAX_INVENTORY_CAPACITY;
-    }
-
-    public async getItem(userId: string, itemId: string, location: 'inventory' | 'storage'): Promise<InventoryItem | null> {
-        const tableName = await resolveInventoryTableName();
-        const compositeItemId = `${itemId}#${location}`;
-        return await dynamoDBService.getItem<InventoryItem>(
-            tableName,
-            { user_id: userId, item_id: compositeItemId }
-        );
-    }
-
-    // Helper to extract base item_id from composite key
-    public extractItemId(compositeItemId: string): string {
-        return compositeItemId.split('#')[0];
+        const PK = `User#${userId}`;
+        const SK = `Inventory#${location}`;
+        
+        const result = await dynamoDBService.getEntity<{ items?: Record<string, number> }>(table, {PK: PK, SK: SK});
+        const rawInventory = result?.items || {};
+        
+        // If item already exists, we can always add more
+        if (rawInventory[itemId]) {
+            return true;
+        }
+        
+        // If it's a new item, check if we have room
+        const currentCount = Object.keys(rawInventory).length;
+        return currentCount < MAX_INVENTORY_CAPACITY;
     }
 }
 

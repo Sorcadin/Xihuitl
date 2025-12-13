@@ -93,7 +93,7 @@ async function buildSpeciesDisplay(speciesList: any[], index: number) {
 
     const embed = new EmbedBuilder()
         .setTitle('Choose Your Pet Species')
-        .setDescription(`**${species.name}**\nType: ${species.type.charAt(0).toUpperCase()}`)
+        .setDescription(`**${species.name}**\nType: ${species.type.charAt(0).toUpperCase() + species.type.slice(1)}`)
         .setImage(imageUrl || null)
         .setColor(0x3498DB)
         .setFooter({ text: `${index + 1}/${speciesList.length} - Use arrows to browse` });

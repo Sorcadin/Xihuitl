@@ -159,4 +159,3 @@ aws cloudformation describe-stacks --stack-name XiuhStack
 - **Cloud**: AWS (EC2, DynamoDB, S3)
 - **Infrastructure**: AWS CDK
 - **APIs**: Google Geocoding & Timezone APIs (optional)
-- **Image Processing**: Sharp (for compositing pet images)

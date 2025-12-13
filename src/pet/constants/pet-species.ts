@@ -35,4 +35,3 @@ export function getSpeciesDataById(id: string): SpeciesData | undefined {
 export function getAllSpecies(): Array<SpeciesData & { id: string }> {
     return Object.entries(PET_SPECIES).map(([id, data]) => ({ id, ...data }));
 }
-

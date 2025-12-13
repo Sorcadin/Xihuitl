@@ -92,8 +92,8 @@ async function buildSpeciesDisplay(speciesList: any[], index: number) {
     const imageUrl = await createPresignedDownloadUrl(species.id.toLowerCase());
 
     const embed = new EmbedBuilder()
-        .setTitle('🐾 Choose Your Pet Species')
-        .setDescription(`**${species.name}**\nType: ${species.type}`)
+        .setTitle('Choose Your Pet Species')
+        .setDescription(`**${species.name}**\nType: ${species.type.charAt(0).toUpperCase()}`)
         .setImage(imageUrl || null)
         .setColor(0x3498DB)
         .setFooter({ text: `${index + 1}/${speciesList.length} - Use arrows to browse` });
@@ -103,7 +103,7 @@ async function buildSpeciesDisplay(speciesList: any[], index: number) {
         .addComponents(
             new ButtonBuilder()
                 .setCustomId('nav_left')
-                .setLabel('⬅️')
+                .setLabel('← Previous')
                 .setStyle(ButtonStyle.Secondary),
             new ButtonBuilder()
                 .setCustomId('adopt_current')
@@ -111,8 +111,8 @@ async function buildSpeciesDisplay(speciesList: any[], index: number) {
                 .setStyle(ButtonStyle.Success),
             new ButtonBuilder()
                 .setCustomId('nav_right')
-                .setLabel('➡️')
-                .setStyle(ButtonStyle.Secondary)
+                .setLabel('Next →')
+                .setStyle(ButtonStyle.Secondary)                
         );
 
     return { embed, components: [row] };

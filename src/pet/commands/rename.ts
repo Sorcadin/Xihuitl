@@ -71,4 +71,3 @@ export async function handleRename(interaction: ChatInputCommandInteraction) {
         await interaction.editReply('❌ An error occurred while renaming your pet.');
     }
 }
-

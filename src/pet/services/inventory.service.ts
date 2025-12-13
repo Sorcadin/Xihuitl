@@ -25,7 +25,7 @@ export class InventoryService {
 
         const result = await dynamoDBService.getEntity<{ items?: Record<string, number> }>(table, {PK: PK, SK: SK});
         const rawBag = result?.items || {};
-        
+
         const hydratedBag: Item[] = Object.entries(rawBag).map(([itemId, quantity]) => {
             const staticData = ITEM_CATALOG[itemId];
 
@@ -271,4 +271,3 @@ export class InventoryService {
 }
 
 export const inventoryService = new InventoryService();
-

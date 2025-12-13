@@ -52,4 +52,3 @@ export async function handleBag(interaction: ChatInputCommandInteraction) {
         }
     }
 }
-

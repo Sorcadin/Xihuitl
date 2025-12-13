@@ -59,4 +59,3 @@ export async function handleInfo(interaction: ChatInputCommandInteraction) {
 
     await interaction.editReply({ embeds: [embed] });
 }
-

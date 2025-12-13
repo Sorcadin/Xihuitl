@@ -14,17 +14,14 @@
   },
   "dependencies": {
     "@aws-sdk/client-dynamodb": "^3.400.0",
-    "@aws-sdk/client-ssm": "^3.400.0",
     "@aws-sdk/lib-dynamodb": "^3.400.0",
     "@aws-sdk/client-s3": "^3.400.0",
     "@aws-sdk/s3-request-presigner": "^3.400.0",
     "aws-cdk-lib": "^2.100.0",
     "axios": "^1.6.0",
-    "constructs": "^10.3.0",
     "discord.js": "^14.13.0",
     "dotenv": "^16.3.1",
-    "luxon": "^3.4.3",
-    "sharp": "^0.34.5"
+    "luxon": "^3.4.3"
   },
   "devDependencies": {
     "@types/luxon": "^3.3.2",
